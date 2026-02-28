@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KyberSwap Skills — Flow Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --accent: #31c48d;
+      --accent-dim: #1a7f5a;
+      --danger: #f85149;
+      --warn: #d29922;
+      --info: #58a6ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; font-weight: 600; }
+    header p { color: var(--text-muted); margin-top: 0.3rem; }
+    nav {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 1rem 2rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    nav a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      font-size: 0.85rem;
+      transition: all 0.15s;
+    }
+    nav a:hover, nav a.active {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    section {
+      margin-bottom: 3rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 1.2rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .section-header h2 { font-size: 1.3rem; font-weight: 600; }
+    .badge {
+      font-size: 0.7rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-safe { background: #1a7f5a33; color: var(--accent); border: 1px solid var(--accent-dim); }
+    .badge-caution { background: #d2992233; color: var(--warn); border: 1px solid #d29922; }
+    .badge-danger { background: #f8514933; color: var(--danger); border: 1px solid #f85149; }
+    .badge-info { background: #58a6ff22; color: var(--info); border: 1px solid #58a6ff; }
+    .section-desc {
+      padding: 1rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .diagram-wrap {
+      padding: 1.5rem;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+    .diagram-wrap .mermaid { width: 100%; }
+    .legend {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .legend-dot {
+      width: 12px; height: 12px; border-radius: 3px;
+    }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      padding: 1.5rem;
+    }
+    .overview-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+      transition: border-color 0.15s;
+    }
+    .overview-card:hover { border-color: var(--accent); }
+    .overview-card h3 { font-size: 1rem; margin-bottom: 0.3rem; }
+    .overview-card p { font-size: 0.82rem; color: var(--text-muted); }
+    .overview-card .cmd { font-family: monospace; color: var(--accent); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>KyberSwap Skills — Flow Diagrams</h1>
+  <p>Visual workflow reference for each DeFi swap skill</p>
+</header>
+
+<nav>
+  <a href="#overview">Overview</a>
+  <a href="#quote">Quote</a>
+  <a href="#swap-build">Swap Build</a>
+  <a href="#swap-execute">Swap Execute</a>
+  <a href="#swap-execute-fast">Fast Execute</a>
+  <a href="#lifecycle">Full Lifecycle</a>
+</nav>
+
+<div class="container">
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- OVERVIEW                                                               -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="overview">
+  <div class="section-header">
+    <h2>Skill Overview</h2>
+    <span class="badge badge-info">4 Skills</span>
+  </div>
+  <div class="overview-grid">
+    <div class="overview-card">
+      <div class="cmd">/quote</div>
+      <h3>Quote</h3>
+      <p>Read-only. Fetches swap route and displays expected output, rate, and gas cost. No transaction built.</p>
+    </div>
+    <div class="overview-card">
+      <div class="cmd">/swap-build</div>
+      <h3>Swap Build</h3>
+      <p>Fetches route, asks for confirmation, then builds encoded calldata. Does NOT submit on-chain.</p>
+    </div>
+    <div class="overview-card">
+      <div class="cmd">/swap-execute</div>
+      <h3>Swap Execute</h3>
+      <p>Takes calldata from /swap-build and broadcasts it on-chain via <code>cast send</code>. Requires confirmation.</p>
+    </div>
+    <div class="overview-card">
+      <div class="cmd">/swap-execute-fast</div>
+      <h3>Fast Execute</h3>
+      <p>Build + broadcast in one step. Shell script handles everything. Only one verbal confirmation before launch.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- QUOTE SKILL                                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="quote">
+  <div class="section-header">
+    <h2>/quote — Get Swap Quote</h2>
+    <span class="badge badge-safe">Read Only</span>
+  </div>
+  <div class="section-desc">
+    Fetches the best route from KyberSwap Aggregator and displays expected output. No transaction is built or submitted.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([User: get quote<br/>amount, tokenIn, tokenOut, chain]) --> B
+
+    subgraph RESOLVE ["Step 1: Resolve Token Addresses"]
+        B[Read token-registry.md] --> C{Token found<br/>in registry?}
+        C -->|Yes| D[Use registry address + decimals]
+        C -->|No| E[Fallback sequence]
+        E --> E1[1. KyberSwap Token API<br/>whitelisted first]
+        E1 -->|Not found| E2[2. CoinGecko API]
+        E2 -->|Not found| E3[3. Ask user for address]
+        E1 -->|Found| D
+        E2 -->|Found| D
+        E3 --> D
+    end
+
+    D --> F
+
+    subgraph SAFETY ["Step 2: Check Token Safety"]
+        F{Token in built-in<br/>registry?}
+        F -->|Yes, skip| H[Assumed safe]
+        F -->|No| G[GET honeypot-fot-info API<br/>via WebFetch]
+        G --> G1{isHoneypot?}
+        G1 -->|true| G2[WARN: Honeypot detected]:::danger
+        G1 -->|false| G3{isFOT?}
+        G3 -->|true| G4[WARN: Fee-on-transfer<br/>tax = X%]:::warn
+        G3 -->|false| H
+        G4 --> H
+    end
+
+    H --> I
+
+    subgraph CONVERT ["Step 3: Convert to Wei"]
+        I["amountInWei = amount × 10^decimals<br/>(plain integer string)"]
+    end
+
+    I --> J
+
+    subgraph ROUTE ["Step 4: GET Route"]
+        J[GET /routes API via WebFetch<br/>tokenIn, tokenOut, amountIn, source] --> K{code == 0?}
+        K -->|No| K1[Handle error:<br/>4008, 4011, 4000, etc.]:::danger
+        K -->|Yes| L[Extract routeSummary]
+    end
+
+    L --> M
+
+    subgraph DUST ["Step 5b: Dust Check"]
+        M{amountInUsd < $0.10?}
+        M -->|Yes| M1[WARN: Dust amount]:::warn
+        M -->|No| M2{gasUsd > amountInUsd?}
+        M2 -->|Yes| M3[WARN: Uneconomical]:::warn
+        M2 -->|No| N[OK]
+        M1 --> N
+        M3 --> N
+    end
+
+    N --> O
+
+    subgraph OUTPUT ["Step 6: Format Output"]
+        O[Calculate amountOut, rate<br/>Display markdown table + JSON]
+    end
+
+    O --> P([Quote displayed to user])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Block</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SWAP BUILD SKILL                                                       -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="swap-build">
+  <div class="section-header">
+    <h2>/swap-build — Build Swap Transaction</h2>
+    <span class="badge badge-caution">Builds Calldata</span>
+  </div>
+  <div class="section-desc">
+    Fetches route, shows quote for confirmation, then builds encoded calldata ready for on-chain submission. Does NOT submit.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([User: swap amount tokenIn to tokenOut<br/>on chain from sender]) --> V
+
+    subgraph VALIDATE ["Input Validation"]
+        V[Parse amount, tokenIn, tokenOut,<br/>chain, sender, recipient, slippage]
+        V --> V1{sender<br/>provided?}
+        V1 -->|No| V2[Ask user for sender]:::warn
+        V1 -->|Yes| V3{Valid address?<br/>Not zero/sentinel?}
+        V2 --> V3
+        V3 -->|Invalid| V4[Reject]:::danger
+        V3 -->|Valid| V5[Set slippage defaults<br/>stable=5, common=50, other=100 bps]
+    end
+
+    V5 --> B
+
+    subgraph RESOLVE ["Step 1: Resolve Tokens"]
+        B[Read token-registry.md] --> C{Found?}
+        C -->|Yes| D[Registry address]
+        C -->|No| E[Token API → CoinGecko → Ask user]
+        E --> D
+    end
+
+    D --> F
+
+    subgraph SAFETY ["Step 2: Token Safety"]
+        F{Non-registry<br/>token?}
+        F -->|Registry| H[Skip]
+        F -->|Non-registry| G[GET honeypot-fot-info]
+        G --> G1{Honeypot?}
+        G1 -->|Yes| G2[REFUSE swap]:::danger
+        G1 -->|No| G3{FOT?}
+        G3 -->|Yes| G4[Warn about tax]:::warn
+        G3 -->|No| H
+        G4 -->|User ack| H
+    end
+
+    H --> I["Step 3: Convert to wei"]
+    I --> J
+
+    subgraph ROUTE ["Step 4: GET Route"]
+        J[GET /routes API] --> K{Success?}
+        K -->|Error| K1[Handle error code]:::danger
+        K -->|OK| L[Extract routeSummary]
+    end
+
+    L --> M
+
+    subgraph DUST ["Step 4a: Dust Check"]
+        M{Dust or<br/>uneconomical?}
+        M -->|Yes| M1[Warn + ask confirmation]:::warn
+        M1 -->|User declines| M2[Abort]:::danger
+        M1 -->|User accepts| N
+        M -->|No| N[OK]
+    end
+
+    N --> O
+
+    subgraph CONFIRM ["Step 4b: Quote Confirmation"]
+        O[Display quote table:<br/>rate, output, min received,<br/>gas, route, addresses]
+        O --> P{User confirms?}
+        P -->|No / Cancel| P1[Abort — swap cancelled]:::danger
+        P -->|Yes| Q[Proceed to build]
+    end
+
+    Q --> R
+
+    subgraph BUILD ["Step 5: POST Build"]
+        R["POST /route/build via curl<br/>routeSummary + sender + slippage + deadline"]
+        R --> S{code == 0?}
+        S -->|4008 stale| S1[Re-fetch route, retry]
+        S -->|4227, 4222, etc.| S2[Handle build error]:::danger
+        S1 --> R
+        S -->|OK| T[Extract tx.data, tx.value, tx.gas]
+    end
+
+    T --> U
+
+    subgraph OUTPUT ["Step 6-7: Output"]
+        U[Display transaction details:<br/>calldata, value, gas, addresses]
+        U --> U1{ERC-20 input?}
+        U1 -->|Yes| U2[Show approval reminder]
+        U1 -->|No / native| U3[Done]
+        U2 --> U3
+    end
+
+    U3 --> W(["Calldata ready<br/>Use /swap-execute to submit"])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning / Confirmation gate</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SWAP EXECUTE SKILL                                                     -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="swap-execute">
+  <div class="section-header">
+    <h2>/swap-execute — Execute Swap On-Chain</h2>
+    <span class="badge badge-danger">Sends Transaction</span>
+  </div>
+  <div class="section-desc">
+    Takes the JSON output from /swap-build and broadcasts the transaction on-chain using Foundry's <code>cast send</code>. Irreversible.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A(["Input: JSON from /swap-build<br/>tx.to, tx.data, tx.value, tx.gas,<br/>chain, sender"]) --> B
+
+    subgraph VALIDATE ["Step 1: Validate Input"]
+        B{Has tx.to,<br/>tx.data, chain,<br/>sender?}
+        B -->|Missing| B1["Ask user to run<br/>/swap-build first"]:::danger
+        B -->|Valid| C[Extract tx fields]
+    end
+
+    C --> D
+
+    subgraph RPC ["Step 2: Determine RPC"]
+        D[Map chain → RPC URL<br/>or use custom --rpc-url]
+        D --> D1{RPC<br/>available?}
+        D1 -->|No| D2[Error: unknown chain]:::danger
+        D1 -->|Yes| E[RPC URL ready]
+    end
+
+    E --> F
+
+    subgraph CONFIRM ["Step 3: Final Confirmation"]
+        F["Display swap summary:<br/>amount, tokens, router,<br/>value, gas, sender"]
+        F --> F1{User confirms<br/>yes?}
+        F1 -->|No| F2[Abort]:::danger
+        F1 -->|Yes| G[Proceed]
+    end
+
+    G --> H
+
+    subgraph SIMULATE ["Step 3b: Simulate (Recommended)"]
+        H["cast call --from sender<br/>--value tx.value tx.to tx.data"]
+        H --> H1{Reverts?}
+        H1 -->|Yes| H2["Warn: would fail on-chain<br/>Re-build with fresh route"]:::danger
+        H1 -->|No| I[Simulation OK]
+    end
+
+    I --> J
+
+    subgraph WALLET ["Step 4: Wallet Method"]
+        J{Which signing<br/>method?}
+        J -->|Keystore| J1["--account NAME<br/>--password-file"]
+        J -->|Env var| J2["--private-key $PRIVATE_KEY"]
+        J -->|Ledger| J3[--ledger]
+        J -->|Trezor| J4[--trezor]
+        J1 --> K[Wallet flags ready]
+        J2 --> K
+        J3 --> K
+        J4 --> K
+    end
+
+    K --> L
+
+    subgraph EXECUTE ["Step 5: cast send"]
+        L["cast send --rpc-url RPC<br/>WALLET_FLAGS --gas-limit gas<br/>--value value tx.to tx.data"]
+        L --> L1{Success?}
+        L1 -->|Error| L2["Handle error:<br/>insufficient gas, revert,<br/>nonce conflict"]:::danger
+        L1 -->|OK| M[Parse txHash, blockNumber,<br/>gasUsed, status]
+    end
+
+    M --> N
+
+    subgraph RESULT ["Step 6: Display Result"]
+        N["Transaction Submitted<br/>txHash, block, gasUsed,<br/>explorer link"]
+    end
+
+    N --> O([Transaction confirmed on-chain])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Confirmation gate</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- SWAP EXECUTE FAST SKILL                                                -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="swap-execute-fast">
+  <div class="section-header">
+    <h2>/swap-execute-fast — Build + Execute Immediately</h2>
+    <span class="badge badge-danger">DANGEROUS</span>
+  </div>
+  <div class="section-desc">
+    Shell script builds the swap and immediately broadcasts. One verbal confirmation, then everything is automated.
+    Includes the new pre-resolution step for unregistered tokens via <code>address:decimals</code> format.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([User: fast swap<br/>amount, tokenIn, tokenOut,<br/>chain, sender]) --> B
+
+    subgraph PREGATE ["Pre-Step: Verbal Confirmation"]
+        B["'You are about to execute IMMEDIATELY<br/>with no confirmation. Proceed?'"]
+        B --> B1{User says yes?}
+        B1 -->|No / Cancel| B2["Abort → recommend<br/>/swap-build + /swap-execute"]:::danger
+        B1 -->|Yes| C[Proceed]
+    end
+
+    C --> D
+
+    subgraph DUST ["Step 0: Dust Pre-Check"]
+        D{Obviously dust<br/>amount?}
+        D -->|Yes| D1["Warn + abort:<br/>gas fees > swap value"]:::warn
+        D -->|No| E[OK]
+    end
+
+    E --> F
+
+    subgraph PRERESOLVE ["Step 0.5: Pre-Resolve Tokens (Agent)"]
+        direction TB
+        F[Check token-registry.md<br/>for both tokens]
+
+        F --> F1A{tokenIn in<br/>registry?}
+        F1A -->|Yes| F2A["Pass SYMBOL to script<br/>(fast path)"]
+        F1A -->|No| F3A["Resolve via fallback"]
+
+        F3A --> F4A["1. Token API (whitelisted)"]
+        F4A -->|Not found| F5A["2. CoinGecko API"]
+        F5A -->|Not found| F6A["3. Ask user"]
+        F4A -->|Found| F7A["Pass address:decimals<br/>to script"]
+        F5A -->|Found| F7A
+        F6A --> F7A
+
+        F --> F1B{tokenOut in<br/>registry?}
+        F1B -->|Yes| F2B["Pass SYMBOL to script"]
+        F1B -->|No| F3B["Resolve via fallback"]
+
+        F3B --> F4B["1. Token API"]
+        F4B -->|Not found| F5B["2. CoinGecko"]
+        F5B -->|Not found| F6B["3. Ask user"]
+        F4B -->|Found| F7B["Pass address:decimals"]
+        F5B -->|Found| F7B
+        F6B --> F7B
+
+        F7A --> HP["Honeypot/FOT check<br/>for non-registry tokens"]
+        F7B --> HP
+        F2A --> READY[Tokens ready]
+        F2B --> READY
+        HP --> HP1{Honeypot?}
+        HP1 -->|Yes| HP2[REFUSE swap]:::danger
+        HP1 -->|No| HP3{FOT?}
+        HP3 -->|Yes| HP4["Warn about tax"]:::warn
+        HP3 -->|No| READY
+        HP4 -->|User ack| READY
+    end
+
+    READY --> G
+
+    subgraph SCRIPT ["Step 1: execute-swap.sh (Shell Script)"]
+        direction TB
+        G["bash execute-swap.sh amount tokenIn tokenOut<br/>chain sender recipient slippage wallet keystore"]
+
+        G --> G0["Validate inputs<br/>(symbol OR address:decimals)"]
+
+        G0 --> G1["fast-swap.sh: Resolve tokens<br/>Symbol → lookup_token() → Token API<br/>address:decimals → split, skip resolution"]
+
+        G1 --> G2["Honeypot/FOT check"]
+        G2 --> G3["Convert amount to wei"]
+        G3 --> G4["GET /routes → route + quote"]
+        G4 --> G5["Dust check (< $0.10 or gas > value)"]
+        G5 --> G6["POST /route/build → tx calldata"]
+        G6 --> G7["USD threshold check (< $1000)"]
+
+        G7 --> G8["Pre-flight checks:<br/>native balance, token balance,<br/>ERC-20 allowance"]
+
+        G8 --> G9["Verify chain ID via RPC"]
+        G9 --> G10["cast send → broadcast tx"]
+    end
+
+    G10 --> H
+
+    subgraph RESULT ["Steps 2-3: Parse + Display"]
+        H{ok == true?}
+        H -->|Yes| I["Transaction Executed<br/>txHash, block, gasUsed,<br/>explorer link"]
+        H -->|No| J{Error prefix?}
+        J -->|pre-flight| J1["No tx sent, no gas spent<br/>Fix issue + retry"]:::warn
+        J -->|broadcast but| J2["Tx sent, gas spent<br/>Check explorer"]:::danger
+    end
+
+    I --> K([Done — irreversible])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort / Danger</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> New: address:decimals pre-resolution</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- FULL LIFECYCLE                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="lifecycle">
+  <div class="section-header">
+    <h2>Full Swap Lifecycle — How Skills Connect</h2>
+    <span class="badge badge-info">Architecture</span>
+  </div>
+  <div class="section-desc">
+    Two paths to execute a swap: the safe 2-step flow (build → execute) and the fast 1-step flow.
+    Token resolution is shared across all skills.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart LR
+    USER([User Request]) --> DECIDE{What does the<br/>user want?}
+
+    DECIDE -->|"Check price"| QUOTE["/quote<br/>Read-only"]
+    DECIDE -->|"Swap with review"| BUILD["/swap-build<br/>Build calldata"]
+    DECIDE -->|"Fast swap / immediate"| FAST["/swap-execute-fast<br/>Build + Execute"]
+
+    subgraph SHARED ["Shared: Token Resolution"]
+        direction TB
+        REG["token-registry.md"]
+        API["KyberSwap Token API"]
+        CG["CoinGecko API"]
+        ASK["Ask User"]
+        REG -.->|fallback| API -.->|fallback| CG -.->|fallback| ASK
+    end
+
+    QUOTE --> SHARED
+    BUILD --> SHARED
+    FAST --> SHARED
+
+    QUOTE --> QOUT(["Quote displayed<br/>No transaction"])
+
+    BUILD --> CONFIRM1{"User confirms<br/>quote?"}
+    CONFIRM1 -->|Yes| CALLDATA["Encoded calldata<br/>ready"]
+    CONFIRM1 -->|No| ABORT1([Cancelled])
+
+    CALLDATA --> EXEC["/swap-execute<br/>Broadcast on-chain"]
+    EXEC --> CONFIRM2{"User confirms<br/>execution?"}
+    CONFIRM2 -->|Yes| TX1([Transaction on-chain])
+    CONFIRM2 -->|No| ABORT2([Cancelled])
+
+    FAST --> CONFIRM3{"Single verbal<br/>confirmation"}
+    CONFIRM3 -->|Yes| SCRIPT["Shell script:<br/>resolve → route → build<br/>→ pre-flight → cast send"]
+    CONFIRM3 -->|No| ABORT3([Cancelled])
+    SCRIPT --> TX2([Transaction on-chain])
+
+    style QUOTE fill:#1a7f5a33,stroke:#31c48d
+    style BUILD fill:#d2992233,stroke:#d29922
+    style EXEC fill:#f8514933,stroke:#f85149
+    style FAST fill:#f8514933,stroke:#f85149
+    style QOUT fill:#1a7f5a33,stroke:#31c48d
+    style TX1 fill:#f8514933,stroke:#f85149
+    style TX2 fill:#f8514933,stroke:#f85149
+    style ABORT1 fill:#30363d,stroke:#8b949e
+    style ABORT2 fill:#30363d,stroke:#8b949e
+    style ABORT3 fill:#30363d,stroke:#8b949e
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Safe / read-only</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Builds calldata (confirmation required)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Sends real transaction (irreversible)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#8b949e"></div> Cancelled / aborted</div>
+  </div>
+</section>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1a7f5a',
+      primaryTextColor: '#e6edf3',
+      primaryBorderColor: '#31c48d',
+      lineColor: '#8b949e',
+      secondaryColor: '#161b22',
+      tertiaryColor: '#0d1117',
+      noteTextColor: '#e6edf3',
+      noteBkgColor: '#161b22',
+      noteBorderColor: '#30363d',
+      fontSize: '14px'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 15,
+      useMaxWidth: true,
+      htmlLabels: true
+    }
+  });
+
+  // Sticky nav active state
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+
+</body>
+</html>

@@ -1,0 +1,36 @@
+.DS_Store
+/.agents
+/.cursor
+/.claude
+
+# Secrets and credentials
+.env
+.env.*
+*.password
+*.key
+*.pem
+*.p12
+*.keystore
+
+# Python
+__pycache__/
+*.pyc
+
+# Build artifacts
+*.skill
+
+# Dependencies
+node_modules/
+
+# Foundry
+.foundry/
+
+# Additional secrets
+*.secret
+*.credentials
+.npmrc
+
+# Logs
+*.log
+/test-output
+SECURITY_AUDIT_REPORT.md
