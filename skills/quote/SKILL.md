@@ -1,6 +1,16 @@
 ---
 name: quote
 description: This skill should be used when the user asks to "get a swap quote", "check swap price", "compare token rates", "see exchange rates", "how much would I get for", "price check", or wants to know the expected output for a token trade. Fetches the best route from KyberSwap Aggregator across 18 EVM chains.
+metadata:
+  tags:
+    - defi
+    - kyberswap
+    - swap
+    - quote
+    - evm
+    - aggregator
+  provider: KyberSwap
+  homepage: https://kyberswap.com
 ---
 
 # KyberSwap Quote Skill

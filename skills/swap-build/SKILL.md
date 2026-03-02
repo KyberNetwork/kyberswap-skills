@@ -1,6 +1,16 @@
 ---
 name: swap-build
 description: This skill should be used when the user asks to "swap-build", "build a swap transaction", "build swap calldata", "create swap tx", "swap tokens", "trade crypto", "execute a token exchange", "swap ETH to USDC", "convert tokens", or needs encoded calldata for on-chain submission. Fetches the best route and builds transaction data via KyberSwap Aggregator.
+metadata:
+  tags:
+    - defi
+    - kyberswap
+    - swap
+    - transaction
+    - evm
+    - aggregator
+  provider: KyberSwap
+  homepage: https://kyberswap.com
 ---
 
 # KyberSwap Build Skill

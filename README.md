@@ -2,6 +2,18 @@
 
 Skills for interacting with the [KyberSwap Aggregator API](https://docs.kyberswap.com/kyberswap-solutions/kyberswap-aggregator). Get swap quotes and build transaction calldata across 18 EVM chains.
 
+<p align="center">
+  <img src="assets/demo-install.gif" alt="KyberSwap Skills demo — install and usage" width="670" />
+  <br />
+  <em>Install the plugin and get a swap quote in seconds</em>
+</p>
+
+<p align="center">
+  <img src="assets/demo-quote.gif" alt="KyberSwap Skills demo — swap quote" width="670" />
+  <br />
+  <em>Get a real-time swap quote across 18 EVM chains</em>
+</p>
+
 ## Structure
 
 This is a Claude Code plugin. Skills live in the `skills/` directory; shared API docs and token data live in `references/`.
@@ -89,6 +101,12 @@ Install as a Claude Code plugin:
 # Or test locally
 claude --plugin-dir /path/to/kyberswap-skills
 ```
+
+<p align="center">
+  <img src="assets/skills-sh.png" alt="KyberSwap Skills listed in Claude Code" width="600" />
+  <br />
+  <em>Skills as they appear in Claude Code after installation</em>
+</p>
 
 ## Supported Chains
 

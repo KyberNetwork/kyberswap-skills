@@ -1,6 +1,17 @@
 ---
 name: swap-execute-fast
 description: This skill should ONLY be used when the user explicitly asks for immediate, no-confirmation execution using phrases like "fast swap", "execute immediately", "swap with no confirmation", "quick swap now", "instant execute", or "skip confirmation and swap". The user must clearly indicate they want to bypass the review/confirmation step. Do NOT use this skill if the user mentions wanting to review, confirm, check, or verify before executing — use swap-build + swap-execute instead. Do NOT use this skill for general swap requests like "swap ETH to USDC" or "trade tokens" — those should go to swap-build. This skill runs a shell script that builds the swap via fast-swap.sh then immediately broadcasts the transaction. DANGEROUS - no confirmation before sending real transactions.
+metadata:
+  tags:
+    - defi
+    - kyberswap
+    - swap
+    - execute
+    - fast
+    - foundry
+    - evm
+  provider: KyberSwap
+  homepage: https://kyberswap.com
 ---
 
 # KyberSwap Fast Execute Skill

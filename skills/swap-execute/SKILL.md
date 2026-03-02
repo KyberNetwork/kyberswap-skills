@@ -1,6 +1,16 @@
 ---
 name: swap-execute
 description: This skill should be used when the user asks to "execute swap", "send swap transaction", "submit swap", "broadcast swap", "run the swap", "execute the trade", or wants to submit a previously built swap transaction on-chain. Uses Foundry's `cast send` to broadcast transactions. Requires swap calldata from swap-build skill output.
+metadata:
+  tags:
+    - defi
+    - kyberswap
+    - swap
+    - execute
+    - foundry
+    - evm
+  provider: KyberSwap
+  homepage: https://kyberswap.com
 ---
 
 # KyberSwap Execute Skill

@@ -1,6 +1,15 @@
 ---
 name: error-handling
 description: Handle errors when swapping tokens through KyberSwap Aggregator API
+metadata:
+  tags:
+    - defi
+    - kyberswap
+    - error-handling
+    - debugging
+    - evm
+  provider: KyberSwap
+  homepage: https://kyberswap.com
 ---
 
 # KyberSwap Error Handling Skill
