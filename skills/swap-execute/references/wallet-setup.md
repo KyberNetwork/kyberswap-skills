@@ -41,7 +41,7 @@ For automation, store the password in a file:
 
 ```bash
 # Create password file securely (prompts without echoing to terminal)
-read -s -p "Password: " pw && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
+printf "Password: " && read -s pw && printf '\n' && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
 ```
 
 > **Security note:** This stores the keystore password as plaintext on disk. While `chmod 600` restricts access to the file owner, any process running as your user, malware, or backup tools could read it. **Use this for development/testing only.** For production with significant funds, use a hardware wallet (Ledger/Trezor) or interactive password entry.
@@ -92,7 +92,7 @@ Simple but **least secure**. The key is stored in plaintext in your shell enviro
 
 ```bash
 # Set in current session only — do NOT persist to ~/.bashrc or ~/.zshrc
-read -s -p "Enter private key: " PRIVATE_KEY && export PRIVATE_KEY
+printf "Enter private key: " && read -s PRIVATE_KEY && printf '\n' && export PRIVATE_KEY
 ```
 
 **NEVER add private keys to shell profile files (`~/.bashrc`, `~/.zshrc`, `~/.profile`).** These files are persisted on disk, may be backed up, committed to version control, or read by other processes.

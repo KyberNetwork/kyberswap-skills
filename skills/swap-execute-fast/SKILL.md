@@ -67,7 +67,7 @@ Build and execute a swap transaction in one step using the shell script at `${CL
 cast wallet import mykey --interactive
 
 # Create password file securely (prompts without echoing to terminal)
-read -s -p "Password: " pw && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
+printf "Password: " && read -s pw && printf '\n' && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
 ```
 
 ## Input Parsing

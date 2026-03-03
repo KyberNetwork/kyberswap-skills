@@ -32,7 +32,7 @@ cast wallet import mykey --interactive
 # Enter private key, then set encryption password
 
 # Create password file securely (prompts without echoing to terminal)
-read -s -p "Password: " pw && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
+printf "Password: " && read -s pw && printf '\n' && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
 
 # Verify
 cast wallet list
@@ -41,7 +41,7 @@ cast wallet list
 **Option B: Environment Variable**
 Set the key in your current shell session only (do not persist to shell profiles):
 ```bash
-read -s -p "Enter private key: " PRIVATE_KEY && export PRIVATE_KEY
+printf "Enter private key: " && read -s PRIVATE_KEY && printf '\n' && export PRIVATE_KEY
 ```
 See the security section in `${CLAUDE_PLUGIN_ROOT}/skills/swap-execute/references/wallet-setup.md` for details.
 
