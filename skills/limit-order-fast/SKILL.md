@@ -151,6 +151,41 @@ Via **WebFetch**, check both `makerAsset` and `takerAsset`:
 - If `isHoneypot: true` — **refuse the order** and warn the user.
 - If `isFOT: true` — warn the user about fee-on-transfer tax. Proceed only if acknowledged.
 
+### Step 0.6: Price Reference Check
+
+Before executing the fast order, fetch the current market price to catch obvious pricing errors. Use the KyberSwap Aggregator to quote 1 unit of makerAsset against takerAsset:
+
+```
+GET https://aggregator-api.kyberswap.com/{chain}/api/v1/routes?tokenIn={makerAssetAddress}&tokenOut={takerAssetAddress}&amountIn={oneUnitMakerInWei}&source=ai-agent-skills
+```
+
+Via **WebFetch**. For limit orders, both tokens must be ERC-20. Use the resolved addresses from Step 0.5 (wrapped tokens for native aliases).
+
+**Calculate and compare:**
+```
+currentMarketPrice = amountOut / 10^(takerAsset decimals)
+deviationPercent = ((targetPrice - currentMarketPrice) / currentMarketPrice) * 100
+```
+
+**Display to user:**
+> Current market price: 1 {makerAsset} = {currentMarketPrice} {takerAsset}
+> Your target price: 1 {makerAsset} = {targetPrice} {takerAsset}
+> Deviation: {deviationPercent}% {above/below} market
+
+**Hard block if unfavorable deviation exceeds 50%:**
+If the user is selling below market by > 50% or buying above market by > 50%, **refuse the order** and say:
+> "Your target price deviates {deviationPercent}% from the current market price in an unfavorable direction. This appears to be a pricing error. Use `/limit-order` for a safer flow with confirmation, or correct the target price."
+
+**Warn if unfavorable deviation exceeds 10%:**
+If the deviation is between 10-50% in the unfavorable direction, warn:
+> "Your target price is {deviationPercent}% {below/above} the current market price. You would {receive less / pay more} than the current rate. Proceed? (yes/no)"
+
+Wait for confirmation before continuing to Step 1.
+
+**If the Aggregator route fails**, skip the price check and note: *"Could not fetch current market price. Proceed with caution."*
+
+> **Tip:** Use `/token-info {makerAsset} {takerAsset} on {chain}` to check current prices before placing orders.
+
 ### Step 1: Run the Script
 
 Execute the script:

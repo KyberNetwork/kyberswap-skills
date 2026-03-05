@@ -249,6 +249,35 @@ Via **WebFetch**, check each input token:
 - If `isHoneypot: true` — **refuse the zap** and warn the user that this token is flagged as a honeypot (cannot be sold after buying).
 - If `isFOT: true` — warn the user that this token has a fee-on-transfer (tax: `{tax}%`). The actual deposited amount will be less than expected. Proceed only if the user acknowledges the tax.
 
+### Step 2a: Price Context
+
+Before zapping, fetch the current USD price of each input token to give the user context about the value they are depositing. Use the KyberSwap Aggregator to quote 1 unit of each token against USDC:
+
+```
+GET https://aggregator-api.kyberswap.com/{chain}/api/v1/routes?tokenIn={tokenAddress}&tokenOut={usdcAddress}&amountIn={oneUnitInWei}&source=ai-agent-skills
+```
+
+Via **WebFetch**. Use the USDC address from `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` for the given chain. If the route fails, try USDT as fallback.
+
+**Calculate USD value of the zap:**
+```
+tokenPriceUsd = amountOut / 10^6   (USDC has 6 decimals)
+zapValueUsd = tokenPriceUsd * amountIn
+```
+
+**Display in the confirmation step (Step 4b):**
+Include the live USD value in the confirmation table so the user can verify they are zapping the intended amount:
+
+| Input token(s) | {amount} {token} (~${zapValueUsd}) |
+
+**Warn if the token price seems anomalous:**
+- If the USD price is `0` or the route returns no results, warn: *"Could not fetch a live USD price for {token}. The token may have very low liquidity. Proceed with caution."*
+- If the fetched price differs significantly from the pool's implied price (from the route response `amountInUsd`), warn: *"The live token price (~${price}) differs from the pool's implied value (~${poolImpliedPrice}). This may indicate price manipulation or stale pool state."*
+
+**If the USDC and USDT routes both fail**, skip the price check and note: *"Could not fetch live USD price for {token}. Price context unavailable."*
+
+> **Tip:** Use `/token-info {token} on {chain}` for detailed token information including market cap and safety status before zapping.
+
 ### Step 3: Convert Amounts to Wei
 
 For each token in `tokensIn`:

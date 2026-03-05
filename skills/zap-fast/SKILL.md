@@ -163,6 +163,35 @@ Via **WebFetch**, check tokenIn:
 - If `isHoneypot: true` — **refuse the zap** and warn the user.
 - If `isFOT: true` — warn the user about fee-on-transfer tax. Proceed only if acknowledged.
 
+### Step 0.6: Price Context
+
+Before executing the fast zap, fetch the current USD price of the input token to validate the zap value. Use the KyberSwap Aggregator:
+
+```
+GET https://aggregator-api.kyberswap.com/{chain}/api/v1/routes?tokenIn={tokenAddress}&tokenOut={usdcAddress}&amountIn={oneUnitInWei}&source=ai-agent-skills
+```
+
+Via **WebFetch**. Use the USDC address from `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` for the given chain. If USDC route fails, try USDT.
+
+**Calculate and display:**
+```
+tokenPriceUsd = amountOut / 10^6
+zapValueUsd = tokenPriceUsd * amountIn
+```
+
+Display to the user before proceeding:
+> Zap value: {amountIn} {token} ~ ${zapValueUsd} USD (1 {token} = ${tokenPriceUsd})
+
+**This helps catch errors** like accidentally zapping 100 ETH instead of 0.1 ETH, or zapping a token whose price has collapsed.
+
+**Warn if price seems wrong:**
+- If `zapValueUsd` > $1,000 and the user hasn't explicitly acknowledged, the script's built-in $1,000 threshold will block it anyway. But showing the USD value upfront helps the user catch mistakes before the script runs.
+- If the USD price is `0` or route fails, warn: *"Could not fetch USD price for {token}. Cannot validate zap value. Proceed with extra caution."*
+
+**If both USDC and USDT routes fail**, skip the price check with a note and proceed.
+
+> **Tip:** Use `/token-info {token} on {chain}` to check current prices before zapping.
+
 ### Step 1: Run the Script
 
 Execute the script:

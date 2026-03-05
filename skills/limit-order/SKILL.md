@@ -134,6 +134,50 @@ Via **WebFetch**, check both `makerAsset` and `takerAsset`:
 - If `isHoneypot: true` — **refuse the order** and warn the user that this token is flagged as a honeypot (cannot be sold after buying).
 - If `isFOT: true` — warn the user that this token has a fee-on-transfer (tax: `{tax}%`). The actual received amount will be less than expected. Proceed only if the user acknowledges the tax.
 
+### Step 2a: Price Reference Check
+
+Before creating the order, fetch the current market price to help the user evaluate their target price. Use the KyberSwap Aggregator to quote 1 unit of makerAsset against takerAsset:
+
+```
+GET https://aggregator-api.kyberswap.com/{chain}/api/v1/routes?tokenIn={makerAssetAddress}&tokenOut={takerAssetAddress}&amountIn={oneUnitMakerInWei}&source=ai-agent-skills
+```
+
+Via **WebFetch**. For native tokens in the quote, use the native token sentinel `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`. For limit orders where tokens are wrapped (WETH, WPOL, etc.), use the wrapped token address.
+
+**Calculate the current market price:**
+```
+currentMarketPrice = amountOut / 10^(takerAsset decimals)
+```
+
+**Compare target price vs market price:**
+```
+deviationPercent = ((targetPrice - currentMarketPrice) / currentMarketPrice) * 100
+```
+
+**Display price context in the confirmation step (Step 6a):**
+
+Add a "Price Context" row to the confirmation table:
+
+| Detail | Value |
+|---|---|
+| Current market price | 1 {makerAsset} = {currentMarketPrice} {takerAsset} |
+| Target price | 1 {makerAsset} = {targetPrice} {takerAsset} |
+| Deviation | {deviationPercent}% {above/below} market |
+
+**Warning thresholds — warn prominently if the target price is unfavorable:**
+
+For **limit-sell** orders (selling makerAsset):
+- Target price **below** market by > 5% → **WARN**: *"Your target price is {deviationPercent}% below the current market price. You would receive less than the current market rate. Are you sure this is intentional?"*
+- Target price **above** market → Informational: *"Your target price is {deviationPercent}% above the current market price. The order will fill when the market reaches your target."*
+
+For **limit-buy** orders (buying takerAsset):
+- Target price **above** market by > 5% → **WARN**: *"Your target price is {deviationPercent}% above the current market price. You would pay more than the current market rate. Are you sure this is intentional?"*
+- Target price **below** market → Informational: *"Your target price is {deviationPercent}% below the current market price. The order will fill when the market reaches your target."*
+
+**If the Aggregator route fails** (no liquidity for the pair), skip the price check and note: *"Could not fetch current market price for this pair. Unable to compare target price with market. Proceed with caution."*
+
+> **Tip:** Use the `token-info` skill for more detailed token information including market cap and safety status.
+
 ### Step 3: Convert Amounts to Wei
 
 ```
