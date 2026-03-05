@@ -64,20 +64,7 @@ Build and execute a zap-in transaction in one step using the shell script at `${
 - **curl and jq installed**: Required for API calls
 - **Wallet configured**: See `${CLAUDE_PLUGIN_ROOT}/skills/swap-execute/references/wallet-setup.md`
 
-> ### ⚠️ USE YOUR EXISTING WALLET MANAGEMENT FIRST ⚠️
->
-> **If you or your agent already have wallet management** (key management service, vault, HSM, custodial API, MPC signer, or any secure signing infrastructure), **use that.** Skip the quick setup below entirely.
->
-> The quick setup below is **an example for development and testing only.** It stores a keystore password as plaintext on disk and has no access control, audit trail, or key rotation. **Do not use it with real funds in production.** Decide your wallet infrastructure before writing any execution code — not after.
-
-**Quick wallet setup (DEVELOPMENT/TESTING ONLY):**
-```bash
-# Import key to keystore
-cast wallet import mykey --interactive
-
-# Create password file securely (prompts without echoing to terminal)
-printf "Password: " && read -s pw && printf '\n' && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
-```
+> **Wallet setup:** See `${CLAUDE_PLUGIN_ROOT}/skills/swap-execute/references/wallet-setup.md` for wallet configuration options (keystore, env, Ledger, Trezor).
 
 ## Input Parsing
 
@@ -101,10 +88,7 @@ Extract these fields:
 
 **If the sender address is not provided, ask the user for it before proceeding.** Do not guess or use a placeholder address.
 
-**Sender address validation — reject or warn before proceeding:**
-- **Must not be the zero address** (`0x0000000000000000000000000000000000000000`) — this is an invalid sender and the transaction will fail. Ask the user for their actual wallet address.
-- **Must not be the native token sentinel** (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) — this is a placeholder for native tokens, not a real account. Ask the user for their actual wallet address.
-- **Warn if it matches a known contract address** (e.g., a token address or the router address) — sending from a contract address is unusual and likely a mistake. Ask the user to confirm.
+**Sender address validation:** See `${CLAUDE_PLUGIN_ROOT}/references/address-validation.md` for validation rules.
 
 ### Slippage Defaults
 
@@ -141,27 +125,15 @@ Before running the script, sanity-check the zap amount. If the amount is obvious
 
 ### Step 0.5: Resolve Token Address
 
-Before running the script, resolve the token address. The script has a built-in registry and Token API fallback, but **unregistered tokens** (memecoins, new launches, etc.) may not be found by the script. Pre-resolving ensures all tokens work.
-
-**For tokenIn:**
+Resolve tokenIn before running the script.
 
 1. Check `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` for the token on the specified chain
-2. **If found in registry** -> pass the **symbol** to the script (e.g. `ETH`, `USDC`). The script resolves it internally (fastest path).
-3. **If NOT found in registry** -> resolve the address using this fallback sequence:
-   a. **KyberSwap Token API** (preferred) — search whitelisted tokens first: `https://token-api.kyberswap.com/api/v1/public/tokens?chainIds={chainId}&symbol={symbol}&isWhitelisted=true` via WebFetch. Pick the result whose `symbol` matches exactly (case-insensitive) with the highest `marketCap`. If no whitelisted match, retry without `isWhitelisted` (only trust verified or market-cap tokens). If still nothing, try by name: `?chainIds={chainId}&name={symbol}&isWhitelisted=true`.
-   b. **CoinGecko API** (secondary fallback) — search CoinGecko for verified contract addresses if the Token API doesn't have it.
-   c. **Ask user** (final fallback) — ask the user for the contract address and decimals. Never guess or fabricate addresses.
-4. Pass resolved tokens as `address:decimals` format (e.g. `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:6`)
+2. **If found** — pass the **symbol** to the script (e.g. `ETH`, `USDC`). The script resolves it internally.
+3. **If NOT found** — use the fallback sequence in `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` (Section "Token Not Listed?"). Pass resolved token as `address:decimals` format.
 
-**For any non-registry token**, check honeypot/FOT before calling the script:
-
-```
-GET https://token-api.kyberswap.com/api/v1/public/tokens/honeypot-fot-info?chainId={chainId}&address={tokenAddress}
-```
-
-Via **WebFetch**, check tokenIn:
+**For any non-registry token**, check honeypot/FOT via the API in `${CLAUDE_PLUGIN_ROOT}/references/api-reference.md` (Honeypot/FOT section):
 - If `isHoneypot: true` — **refuse the zap** and warn the user.
-- If `isFOT: true` — warn the user about fee-on-transfer tax. Proceed only if acknowledged.
+- If `isFOT: true` — warn about fee-on-transfer tax. Proceed only if acknowledged.
 
 ### Step 0.6: Price Context
 
@@ -318,89 +290,11 @@ bash execute-zap.sh ETH 0.5 0xPoolAddress uniswapv3 -1000 1000 polygon 0xSender 
 
 ## Supported Chains
 
-ethereum, bsc, arbitrum, polygon, optimism, avalanche, base, linea, sonic, berachain, ronin, scroll, zksync
-
-> **Note:** ZaaS supports 13 chains, which is fewer than the Aggregator's 18 chains. Chains not listed here (mantle, unichain, hyperevm, plasma, etherlink, monad, megaeth) are not supported for zap operations.
+See `${CLAUDE_PLUGIN_ROOT}/references/supported-chains.md` (ZaaS section) for the full chain list. ZaaS supports 13 chains.
 
 ## Supported DEX Identifiers
 
-Full list of DEX IDs used in the `dex` parameter (71 DEXes):
-
-| DEX ID | DEX Name |
-|--------|----------|
-| `DEX_UNISWAPV3` | Uniswap V3 |
-| `DEX_UNISWAPV2` | Uniswap V2 |
-| `DEX_UNISWAP_V4` | Uniswap V4 |
-| `DEX_PANCAKESWAPV3` | PancakeSwap V3 |
-| `DEX_PANCAKESWAPV2` | PancakeSwap V2 |
-| `DEX_SUSHISWAPV3` | SushiSwap V3 |
-| `DEX_SUSHISWAPV2` | SushiSwap V2 |
-| `DEX_CURVE` | Curve |
-| `DEX_BALANCER` | Balancer |
-| `DEX_AERODROMECL` | Aerodrome Concentrated |
-| `DEX_AERODROMEBASIC` | Aerodrome Basic |
-| `DEX_VELODROME_SLIPSTREAM` | Velodrome Slipstream |
-| `DEX_VELODROMEBASIC` | Velodrome Basic |
-| `DEX_CAMELOTV3` | Camelot V3 |
-| `DEX_CAMELOTV2` | Camelot V2 |
-| `DEX_QUICKSWAPV3UNI` | QuickSwap V3 (Uniswap) |
-| `DEX_QUICKSWAPV3ALGEBRA` | QuickSwap V3 (Algebra) |
-| `DEX_QUICKSWAPV2` | QuickSwap V2 |
-| `DEX_QUICKSWAPV4` | QuickSwap V4 |
-| `DEX_METAVAULTV3` | Metavault V3 |
-| `DEX_RAMSESCL` | Ramses CL |
-| `DEX_RAMSESLEGACY` | Ramses Legacy |
-| `DEX_THRUSTERV3` | Thruster V3 |
-| `DEX_THRUSTERV2` | Thruster V2 (1% fee) |
-| `DEX_THRUSTERV2DEGEN` | Thruster V2 Degen (0.3% fee) |
-| `DEX_THENAFUSION` | Thena Fusion |
-| `DEX_THENAALGEBRAINTEGRAL` | Thena Algebra Integral |
-| `DEX_PANGOLINSTANDARD` | Pangolin Standard |
-| `DEX_LYNEX` | Lynex |
-| `DEX_GAMMA` | Gamma |
-| `DEX_AMBIENT` | Ambient |
-| `DEX_DEFIEDGE` | Defi Edge |
-| `DEX_BEEFY` | Beefy |
-| `DEX_VFAT` | Vfat |
-| `DEX_MAVERICK` | Maverick |
-| `DEX_TRADERJOE` | Trader Joe |
-| `DEX_LINEHUBV3` | LineHub V3 |
-| `DEX_RINGV2` | Ring V2 |
-| `DEX_KOILEGACY` | KOI Legacy |
-| `DEX_KOICL` | KOI CL |
-| `DEX_EQUALIZER` | Equalizer |
-| `DEX_NILE` | Nile |
-| `DEX_ARRAKISV1` | Arrakis V1 |
-| `DEX_ARRAKISV2` | Arrakis V2 |
-| `DEX_ICHI` | Ichi |
-| `DEX_GMX` | GMX |
-| `DEX_SWAPMODEV2` | SwapMode V2 |
-| `DEX_SWAPMODEV3` | SwapMode V3 |
-| `DEX_SOLIDLY` | Solidly |
-| `DEX_GYROSCOPE_ECLP` | Gyroscope ECLP |
-| `DEX_BLADESWAP` | Blade Swap |
-| `DEX_FENIX_FINANCE` | Fenix Finance |
-| `DEX_FLUID_DEX_T1_VAULT_T4` | Fluid Dex T1 Vault T4 |
-| `DEX_SYNCSWAP_V3` | SyncSwap V3 |
-| `DEX_SYNCSWAP_V1_V2` | SyncSwap V1 & V2 |
-| `DEX_ZKSWAP_V3` | ZkSwap V3 |
-| `DEX_ZKSWAP_V2` | ZkSwap V2 |
-| `DEX_KODIAK_V2` | Kodiak V2 |
-| `DEX_KODIAK_V3` | Kodiak V3 |
-| `DEX_BERAHUB` | BeraHub |
-| `DEX_BURRBEAR` | BurrBear |
-| `DEX_SHADOW_CL` | Shadow CL |
-| `DEX_SHADOW_LEGACY` | Shadow Legacy |
-| `DEX_STEER` | Steer |
-| `DEX_SQUADSWAP_V2` | Squad Swap V2 |
-| `DEX_SQUADSWAP_V3` | Squad Swap V3 |
-| `DEX_BUNNI_V2` | Bunni V2 |
-| `DEX_9MM_V2` | 9MM V2 |
-| `DEX_9MM_V3` | 9MM V3 |
-| `DEX_ARBERA` | Arbera |
-| `DEX_BROWNFI` | BrownFi V2 |
-
-For chain-to-DEX mappings, see: https://docs.kyberswap.com/kyberswap-solutions/kyberswap-zap-as-a-service/zaps-supported-chains-dexes
+See `${CLAUDE_PLUGIN_ROOT}/references/dex-identifiers.md` for the complete list of 71 supported DEX IDs.
 
 ## Important Notes
 

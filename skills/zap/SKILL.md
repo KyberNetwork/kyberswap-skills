@@ -88,10 +88,7 @@ Extract these fields:
 
 **If the sender address is not provided, ask the user for it before proceeding.** Do not guess or use a placeholder address.
 
-**Sender address validation — reject or warn before proceeding:**
-- **Must not be the zero address** (`0x0000000000000000000000000000000000000000`) — this is an invalid sender and the transaction will fail.
-- **Must not be the native token sentinel** (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) — this is a placeholder for native tokens, not a real account.
-- **Warn if it matches a known contract address** (e.g., a token address or the router address) — sending from a contract address is unusual and likely a mistake. Ask the user to confirm.
+**Sender address validation:** See `${CLAUDE_PLUGIN_ROOT}/references/address-validation.md` for validation rules.
 
 ### Slippage Defaults
 
@@ -107,112 +104,11 @@ If the user does not specify slippage, choose based on the pool pair type:
 
 ### Supported Chains (13)
 
-| Chain | Path Slug | Chain ID |
-|---|---|---|
-| Ethereum | `ethereum` | `1` |
-| BNB Smart Chain | `bsc` | `56` |
-| Arbitrum | `arbitrum` | `42161` |
-| Polygon | `polygon` | `137` |
-| Optimism | `optimism` | `10` |
-| Base | `base` | `8453` |
-| Avalanche | `avalanche` | `43114` |
-| Linea | `linea` | `59144` |
-| Scroll | `scroll` | `534352` |
-| zkSync | `zksync` | `324` |
-| Sonic | `sonic` | `146` |
-| Berachain | `berachain` | `80094` |
-| Ronin | `ronin` | `2020` |
-
-> **Note:** The ZaaS API supports 13 chains — fewer than the Aggregator's 18. Mantle, Unichain, HyperEVM, Plasma, Etherlink, Monad, and MegaETH are **not** supported for zap operations.
+See `${CLAUDE_PLUGIN_ROOT}/references/supported-chains.md` (ZaaS section) for the full chain list. ZaaS supports 13 chains — fewer than the Aggregator's 18. Mantle, Unichain, HyperEVM, Plasma, Etherlink, Monad, and MegaETH are **not** supported for zap operations.
 
 ### Supported DEX Identifiers
 
-Full list of DEX IDs used in the `dex` parameter (71 DEXes):
-
-| DEX ID | DEX Name |
-|--------|----------|
-| `DEX_UNISWAPV3` | Uniswap V3 |
-| `DEX_UNISWAPV2` | Uniswap V2 |
-| `DEX_UNISWAP_V4` | Uniswap V4 |
-| `DEX_PANCAKESWAPV3` | PancakeSwap V3 |
-| `DEX_PANCAKESWAPV2` | PancakeSwap V2 |
-| `DEX_SUSHISWAPV3` | SushiSwap V3 |
-| `DEX_SUSHISWAPV2` | SushiSwap V2 |
-| `DEX_CURVE` | Curve |
-| `DEX_BALANCER` | Balancer |
-| `DEX_AERODROMECL` | Aerodrome Concentrated |
-| `DEX_AERODROMEBASIC` | Aerodrome Basic |
-| `DEX_VELODROME_SLIPSTREAM` | Velodrome Slipstream |
-| `DEX_VELODROMEBASIC` | Velodrome Basic |
-| `DEX_CAMELOTV3` | Camelot V3 |
-| `DEX_CAMELOTV2` | Camelot V2 |
-| `DEX_QUICKSWAPV3UNI` | QuickSwap V3 (Uniswap) |
-| `DEX_QUICKSWAPV3ALGEBRA` | QuickSwap V3 (Algebra) |
-| `DEX_QUICKSWAPV2` | QuickSwap V2 |
-| `DEX_QUICKSWAPV4` | QuickSwap V4 |
-| `DEX_METAVAULTV3` | Metavault V3 |
-| `DEX_RAMSESCL` | Ramses CL |
-| `DEX_RAMSESLEGACY` | Ramses Legacy |
-| `DEX_THRUSTERV3` | Thruster V3 |
-| `DEX_THRUSTERV2` | Thruster V2 (1% fee) |
-| `DEX_THRUSTERV2DEGEN` | Thruster V2 Degen (0.3% fee) |
-| `DEX_THENAFUSION` | Thena Fusion |
-| `DEX_THENAALGEBRAINTEGRAL` | Thena Algebra Integral |
-| `DEX_PANGOLINSTANDARD` | Pangolin Standard |
-| `DEX_LYNEX` | Lynex |
-| `DEX_GAMMA` | Gamma |
-| `DEX_AMBIENT` | Ambient |
-| `DEX_DEFIEDGE` | Defi Edge |
-| `DEX_BEEFY` | Beefy |
-| `DEX_VFAT` | Vfat |
-| `DEX_MAVERICK` | Maverick |
-| `DEX_TRADERJOE` | Trader Joe |
-| `DEX_LINEHUBV3` | LineHub V3 |
-| `DEX_RINGV2` | Ring V2 |
-| `DEX_KOILEGACY` | KOI Legacy |
-| `DEX_KOICL` | KOI CL |
-| `DEX_EQUALIZER` | Equalizer |
-| `DEX_NILE` | Nile |
-| `DEX_ARRAKISV1` | Arrakis V1 |
-| `DEX_ARRAKISV2` | Arrakis V2 |
-| `DEX_ICHI` | Ichi |
-| `DEX_GMX` | GMX |
-| `DEX_SWAPMODEV2` | SwapMode V2 |
-| `DEX_SWAPMODEV3` | SwapMode V3 |
-| `DEX_SOLIDLY` | Solidly |
-| `DEX_GYROSCOPE_ECLP` | Gyroscope ECLP |
-| `DEX_BLADESWAP` | Blade Swap |
-| `DEX_FENIX_FINANCE` | Fenix Finance |
-| `DEX_FLUID_DEX_T1_VAULT_T4` | Fluid Dex T1 Vault T4 |
-| `DEX_SYNCSWAP_V3` | SyncSwap V3 |
-| `DEX_SYNCSWAP_V1_V2` | SyncSwap V1 & V2 |
-| `DEX_ZKSWAP_V3` | ZkSwap V3 |
-| `DEX_ZKSWAP_V2` | ZkSwap V2 |
-| `DEX_KODIAK_V2` | Kodiak V2 |
-| `DEX_KODIAK_V3` | Kodiak V3 |
-| `DEX_BERAHUB` | BeraHub |
-| `DEX_BURRBEAR` | BurrBear |
-| `DEX_SHADOW_CL` | Shadow CL |
-| `DEX_SHADOW_LEGACY` | Shadow Legacy |
-| `DEX_STEER` | Steer |
-| `DEX_SQUADSWAP_V2` | Squad Swap V2 |
-| `DEX_SQUADSWAP_V3` | Squad Swap V3 |
-| `DEX_BUNNI_V2` | Bunni V2 |
-| `DEX_9MM_V2` | 9MM V2 |
-| `DEX_9MM_V3` | 9MM V3 |
-| `DEX_ARBERA` | Arbera |
-| `DEX_BROWNFI` | BrownFi V2 |
-
-For chain-to-DEX mappings, see: https://docs.kyberswap.com/kyberswap-solutions/kyberswap-zap-as-a-service/zaps-supported-chains-dexes
-
-### Protocol Fee Tiers
-
-| Pair Type | Fee |
-|---|---|
-| Stable pairs | 0.01% |
-| Correlated pairs | 0.025% |
-| Common pairs | 0.1% |
-| Exotic pairs | 0.25% |
+See `${CLAUDE_PLUGIN_ROOT}/references/dex-identifiers.md` for the complete list of 71 supported DEX IDs. When a user provides shorthand (e.g., `uniswapv3`), normalize to API format (e.g., `DEX_UNISWAPV3`) before calling the API.
 
 ## Workflow — Zap In
 
@@ -537,23 +433,13 @@ This JSON block enables downstream agents or plugins to parse the zap result wit
 
 ### Step 7: ERC-20 Approval Reminder
 
-If any token in `tokensIn` is **not** the native token, add this note after the transaction details:
-
-```
-### Token Approval Required
-
-Before submitting this zap, you must approve the KyberSwap ZapRouter to spend your token(s):
+If any token in `tokensIn` is **not** the native token, remind the user about token approval. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-20 section). Use:
 
 - **Token contract:** `{tokenIn address}`
 - **Spender (ZapRouter):** `0x0e97c887b61ccd952a53578b04763e7134429e05`
-- **Amount:** `{amountInWei}` (exact amount, recommended) or `type(uint256).max` (unlimited — see warning below)
+- **Amount:** `{amountInWei}`
 
-**IMPORTANT:** Approve the ZapRouter (`0x0e97c887b61ccd952a53578b04763e7134429e05`), NOT the Aggregator router (`0x6131B5fae19EA4f9D964eAc0408E4408b66337b5`). These are different contracts.
-
-> **Security warning:** Unlimited approvals (`type(uint256).max`) are convenient but risky. If the router contract is ever compromised, an attacker could drain all approved tokens from your wallet. For large holdings, prefer **exact-amount approvals** matching `amountInWei`. Only use unlimited approvals with wallets holding limited funds.
-
-Use your wallet or a tool like `cast` to send the approval transaction first.
-```
+**IMPORTANT:** Approve the ZapRouter (`0x0e97c887b61ccd952a53578b04763e7134429e05`), NOT the Aggregator router.
 
 ## Workflow — Zap Out
 
@@ -704,21 +590,11 @@ Present the results:
 
 ### Step 5: NFT Approval Reminder (Zap Out)
 
-For zap-out operations, the sender must approve the ZapRouter to manage the position NFT:
-
-```
-### NFT Approval Required
-
-Before submitting this zap-out, you must approve the KyberSwap ZapRouter to manage your position NFT:
+For zap-out operations, the sender must approve the ZapRouter to manage the position NFT. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-721 section). Use:
 
 - **NFT contract:** `{nftManagerAddress}` (the DEX's position manager)
 - **Spender (ZapRouter):** `0x0e97c887b61ccd952a53578b04763e7134429e05`
 - **Token ID:** `{positionId}`
-
-Call `approve(0x0e97c887b61ccd952a53578b04763e7134429e05, {positionId})` on the NFT contract, or use `setApprovalForAll` for all positions.
-
-> **Security warning:** `setApprovalForAll` grants access to ALL your position NFTs on this DEX. Prefer single-token `approve` for better security.
-```
 
 ## Workflow — Migrate
 
@@ -916,21 +792,11 @@ Present the results:
 
 ### Step 5: NFT Approval Reminder (Migrate)
 
-For migrate operations, the sender must approve the ZapRouter to manage the source position NFT:
-
-```
-### NFT Approval Required
-
-Before submitting this migration, you must approve the KyberSwap ZapRouter to manage your source position NFT:
+For migrate operations, the sender must approve the ZapRouter to manage the source position NFT. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-721 section). Use:
 
 - **NFT contract:** `{nftManagerAddress}` (the DEX's position manager)
 - **Spender (ZapRouter):** `0x0e97c887b61ccd952a53578b04763e7134429e05`
 - **Token ID:** `{positionId}`
-
-Call `approve(0x0e97c887b61ccd952a53578b04763e7134429e05, {positionId})` on the NFT contract, or use `setApprovalForAll` for all positions.
-
-> **Security warning:** `setApprovalForAll` grants access to ALL your position NFTs on this DEX. Prefer single-token `approve` for better security.
-```
 
 ## Contract Addresses
 

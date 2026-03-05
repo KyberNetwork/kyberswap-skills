@@ -126,6 +126,7 @@ normalize_dex() {
   case "$dex_lower" in
     uniswapv3|uniswap-v3|uniswap_v3)              echo "DEX_UNISWAPV3" ;;
     uniswapv2|uniswap-v2|uniswap_v2)              echo "DEX_UNISWAPV2" ;;
+    uniswapv4|uniswap-v4|uniswap_v4)              echo "DEX_UNISWAP_V4" ;;
     pancakeswapv3|pancakev3|pancake-v3)            echo "DEX_PANCAKESWAPV3" ;;
     pancakeswapv2|pancakev2|pancake-v2)            echo "DEX_PANCAKESWAPV2" ;;
     sushiswapv3|sushiv3|sushi-v3)                  echo "DEX_SUSHISWAPV3" ;;
@@ -338,8 +339,8 @@ main() {
     die "Invalid amount: '$amount'. Must be a non-negative number."
   fi
 
-  # Validate pool address
-  [[ "$pool_address" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid pool address: $pool_address. Must be a valid Ethereum address (0x + 40 hex chars)."
+  # Validate pool address (20-byte address) or pool ID (32-byte, for Uniswap V4)
+  [[ "$pool_address" =~ ^0x[a-fA-F0-9]{40}$ ]] || [[ "$pool_address" =~ ^0x[a-fA-F0-9]{64}$ ]] || die "Invalid pool address/ID: $pool_address. Must be 0x + 40 hex chars (address) or 0x + 64 hex chars (V4 pool ID)."
 
   # Validate dex identifier
   [[ "$dex" =~ ^[a-zA-Z0-9_-]+$ ]] || die "Invalid dex identifier: $dex. Must contain only alphanumeric characters, hyphens, and underscores."

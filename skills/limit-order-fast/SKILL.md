@@ -59,20 +59,7 @@ Create a limit order in one step using the shell script at `${CLAUDE_PLUGIN_ROOT
 - **bc installed**: Required for price calculations
 - **Wallet configured**: See `${CLAUDE_PLUGIN_ROOT}/skills/swap-execute/references/wallet-setup.md`
 
-> ### ⚠️ USE YOUR EXISTING WALLET MANAGEMENT FIRST ⚠️
->
-> **If you or your agent already have wallet management** (key management service, vault, HSM, custodial API, MPC signer, or any secure signing infrastructure), **use that.** Skip the quick setup below entirely.
->
-> The quick setup below is **an example for development and testing only.** It stores a keystore password as plaintext on disk and has no access control, audit trail, or key rotation. **Do not use it with real funds in production.** Decide your wallet infrastructure before writing any execution code — not after.
-
-**Quick wallet setup (DEVELOPMENT/TESTING ONLY):**
-```bash
-# Import key to keystore
-cast wallet import mykey --interactive
-
-# Create password file securely (prompts without echoing to terminal)
-printf "Password: " && read -s pw && printf '\n' && echo "$pw" > ~/.foundry/.password && chmod 600 ~/.foundry/.password
-```
+> **Wallet setup:** See `${CLAUDE_PLUGIN_ROOT}/skills/swap-execute/references/wallet-setup.md` for wallet configuration options (keystore, env, Ledger, Trezor).
 
 ## Input Parsing
 
@@ -95,10 +82,7 @@ Extract these fields:
 
 **If the maker address is not provided, ask the user for it before proceeding.** Do not guess or use a placeholder address.
 
-**Maker address validation — reject or warn before proceeding:**
-- **Must not be the zero address** (`0x0000000000000000000000000000000000000000`) — this is an invalid address and the order will fail. Ask the user for their actual wallet address.
-- **Must not be the native token sentinel** (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) — this is a placeholder for native tokens, not a real account. Ask the user for their actual wallet address.
-- **Warn if it matches a known contract address** (e.g., a token address or the DSLOProtocol contract) — creating orders from a contract address is unusual and likely a mistake. Ask the user to confirm.
+**Maker address validation:** See `${CLAUDE_PLUGIN_ROOT}/references/address-validation.md` for validation rules.
 
 **Expiry conversion from human language:**
 
@@ -129,25 +113,15 @@ Before running the script, sanity-check the amounts. If the making amount is obv
 
 ### Step 0.5: Resolve Token Addresses
 
-Before running the script, resolve both token addresses. The script has a built-in registry and Token API fallback, but **unregistered tokens** (memecoins, new launches, etc.) may not be found by the script. Pre-resolving ensures all tokens work.
-
-**For each token (makerAsset and takerAsset):**
+Resolve both makerAsset and takerAsset before running the script.
 
 1. Check `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` for the token on the specified chain
-2. **If found in registry** -> pass the **symbol** to the script (e.g. `ETH`, `USDC`). The script resolves it internally (fastest path).
-3. **If NOT found in registry** -> resolve the address using this fallback sequence:
-   a. **KyberSwap Token API** (preferred) — search whitelisted tokens first: `https://token-api.kyberswap.com/api/v1/public/tokens?chainIds={chainId}&symbol={symbol}&isWhitelisted=true` via WebFetch. Pick the result whose `symbol` matches exactly (case-insensitive) with the highest `marketCap`. If no whitelisted match, retry without `isWhitelisted` (only trust verified or market-cap tokens). If still nothing, try by name: `?chainIds={chainId}&name={symbol}&isWhitelisted=true`.
-   b. **CoinGecko API** (secondary fallback) — search CoinGecko for verified contract addresses if the Token API doesn't have it.
-   c. **Ask user** (final fallback) — ask the user for the contract address and decimals. Never guess or fabricate addresses.
-4. Pass resolved tokens as `address:decimals` format (e.g. `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:6`)
+2. **If found** — pass the **symbol** to the script (e.g. `ETH`, `USDC`). The script resolves it internally.
+3. **If NOT found** — use the fallback sequence in `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md` (Section "Token Not Listed?"). Pass resolved tokens as `address:decimals` format (e.g. `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48:6`).
 
-**For any non-registry token**, check honeypot/FOT before calling the script:
+**For limit orders:** use wrapped ERC-20s instead of native tokens. See `${CLAUDE_PLUGIN_ROOT}/references/wrapped-tokens.md`.
 
-```
-GET https://token-api.kyberswap.com/api/v1/public/tokens/honeypot-fot-info?chainId={chainId}&address={tokenAddress}
-```
-
-Via **WebFetch**, check both `makerAsset` and `takerAsset`:
+**For any non-registry token**, check honeypot/FOT via the API documented in `${CLAUDE_PLUGIN_ROOT}/references/api-reference.md` (Honeypot/FOT section):
 - If `isHoneypot: true` — **refuse the order** and warn the user.
 - If `isFOT: true` — warn the user about fee-on-transfer tax. Proceed only if acknowledged.
 
@@ -315,7 +289,7 @@ bash fast-limit-order.sh 100 LINK USDC 15.50 polygon 0xYourAddress 2592000 env
 
 ## Supported Chains (17)
 
-ethereum, bsc, arbitrum, polygon, optimism, avalanche, base, linea, mantle, sonic, berachain, ronin, unichain, hyperevm, plasma, etherlink, monad
+See `${CLAUDE_PLUGIN_ROOT}/references/supported-chains.md` for the full chain list. All Aggregator chains except MegaETH are supported.
 
 > **Note:** Limit orders are not supported on megaeth. If the user requests megaeth, inform them and suggest using a swap instead.
 

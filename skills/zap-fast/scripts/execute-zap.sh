@@ -222,8 +222,8 @@ main() {
     json_output false "Zap failed (pre-flight): Invalid tokenIn '$token_in'. Must be a symbol (e.g. ETH) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
     exit 1
   fi
-  if ! [[ "$pool_address" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
-    json_output false "Zap failed (pre-flight): Invalid pool address '$pool_address'. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
+  if ! [[ "$pool_address" =~ ^0x[a-fA-F0-9]{40}$ ]] && ! [[ "$pool_address" =~ ^0x[a-fA-F0-9]{64}$ ]]; then
+    json_output false "Zap failed (pre-flight): Invalid pool address/ID '$pool_address'. Must be 0x + 40 hex chars (address) or 0x + 64 hex chars (V4 pool ID). No transaction was submitted."
     exit 1
   fi
   if ! [[ "$dex" =~ ^[a-zA-Z0-9_-]+$ ]]; then

@@ -75,14 +75,11 @@ takingAmount = desiredBuyAmount                  (amount of takerAsset to receiv
 
 **If the maker address is not provided, ask the user for it before proceeding.** Do not guess or use a placeholder address.
 
-**Maker address validation — reject or warn before proceeding:**
-- **Must not be the zero address** (`0x0000000000000000000000000000000000000000`) — this is an invalid address and the operation will fail.
-- **Must not be the native token sentinel** (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) — this is a placeholder for native tokens, not a real account.
-- **Warn if it matches a known contract address** (e.g., a token address or the DSLOProtocol contract) — creating orders from a contract address is unusual and likely a mistake. Ask the user to confirm.
+**Maker address validation:** See `${CLAUDE_PLUGIN_ROOT}/references/address-validation.md` for validation rules. Reject zero address, native token sentinel, and warn on contract addresses.
 
 ## Supported Chains (17)
 
-ethereum (1), bsc (56), arbitrum (42161), polygon (137), optimism (10), avalanche (43114), base (8453), linea (59144), mantle (5000), sonic (146), berachain (80094), ronin (2020), unichain (130), hyperevm (999), plasma (9745), etherlink (42793), monad (143)
+See `${CLAUDE_PLUGIN_ROOT}/references/supported-chains.md` for the full chain list with chain IDs. All Aggregator chains except MegaETH are supported.
 
 > **Note:** Limit orders are not supported on megaeth. If the user requests megaeth, inform them and suggest using a swap instead.
 
@@ -94,25 +91,7 @@ Read the token registry at `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md`.
 
 Look up `makerAsset` and `takerAsset` for the specified chain. Match case-insensitively. Note the **decimals** for each token.
 
-**Aliases to handle — IMPORTANT: Limit orders require ERC-20 tokens. The native token sentinel (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) is NOT valid for `makerAsset` or `takerAsset`. When the user specifies a native token alias, automatically convert it to the wrapped ERC-20 equivalent:**
-
-| User says | Chain(s) | Resolve to (wrapped ERC-20) |
-|---|---|---|
-| "ETH" | Ethereum | WETH (`0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2`) |
-| "ETH" | Arbitrum | WETH (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`) |
-| "ETH" | Optimism | WETH (`0x4200000000000000000000000000000000000006`) |
-| "ETH" | Base | WETH (`0x4200000000000000000000000000000000000006`) |
-| "ETH" | Linea | WETH (`0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f`) |
-| "ETH" | Unichain | WETH (look up in token registry) |
-| "MATIC" / "POL" | Polygon | WPOL (`0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270`) |
-| "BNB" | BSC | WBNB (`0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c`) |
-| "AVAX" | Avalanche | WAVAX (`0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7`) |
-| "MNT" | Mantle | WMNT (look up in token registry) |
-| "S" | Sonic | WS (look up in token registry) |
-| "BERA" | Berachain | WBERA (look up in token registry) |
-| "RON" | Ronin | WRON (look up in token registry) |
-| "XTZ" | Etherlink | WXTZ (look up in token registry) |
-| "MON" | Monad | WMON (look up in token registry) |
+**Aliases to handle — IMPORTANT: Limit orders require ERC-20 tokens.** The native token sentinel (`0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`) is NOT valid for `makerAsset` or `takerAsset`. When the user specifies a native token alias, automatically convert it to the wrapped ERC-20 equivalent. See `${CLAUDE_PLUGIN_ROOT}/references/wrapped-tokens.md` for the complete mapping table.
 
 When auto-converting, display a note to the user: *"Native {TOKEN} converted to W{TOKEN} for limit orders — the Limit Order API requires ERC-20 tokens, not native token addresses."*
 
@@ -378,21 +357,11 @@ Present the results:
 
 ### Step 10: ERC-20 Approval Reminder
 
-If `makerAsset` is **not** the native token, add this note after the order details:
-
-```
-### Token Approval Required
-
-Before your limit order can be filled, you must approve the DSLOProtocol contract to spend your {makerAsset}:
+If `makerAsset` is **not** the native token, remind the user about token approval. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-20 section) for the approval template. Use:
 
 - **Token contract:** `{makerAsset address}`
 - **Spender (DSLOProtocol):** `{contractAddress}`
-- **Amount:** `{makingAmountWei}` (exact amount, recommended) or `type(uint256).max` (unlimited — see warning below)
-
-> **Security warning:** Unlimited approvals (`type(uint256).max`) are convenient but risky. If the contract is ever compromised, an attacker could drain all approved tokens from your wallet. For large holdings, prefer **exact-amount approvals** matching `makingAmountWei`. Only use unlimited approvals with wallets holding limited funds.
-
-Use your wallet or a tool like `cast` to send the approval transaction.
-```
+- **Amount:** `{makingAmountWei}`
 
 ### Structured JSON Output
 
