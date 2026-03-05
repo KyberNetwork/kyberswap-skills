@@ -40,6 +40,10 @@ kyberswap-skills/
 │   │   ├── SKILL.md
 │   │   └── scripts/
 │   │       └── fast-limit-order.sh  # Token resolution + sign + create
+│   ├── order-manager/  # View and analyze limit orders across all statuses
+│   │   └── SKILL.md
+│   ├── token-info/     # Token metadata, price, and safety lookup
+│   │   └── SKILL.md
 │   ├── zap/            # Zap in/out of concentrated liquidity pools
 │   │   └── SKILL.md
 │   ├── zap-fast/       # Build + execute zap in one step (no confirmation)
@@ -47,6 +51,8 @@ kyberswap-skills/
 │   │   └── scripts/
 │   │       ├── fast-zap.sh      # Token resolution + zap route building
 │   │       └── execute-zap.sh   # Calls fast-zap.sh then broadcasts
+│   ├── position-manager/ # View and analyze liquidity positions
+│   │   └── SKILL.md
 │   └── error-handling/ # Error diagnosis and resolution
 │       └── SKILL.md
 ├── references/         # Shared docs
@@ -128,6 +134,42 @@ Sign and create a limit order in one step — no confirmation prompts.
 
 Requires `cast`, `curl`, `jq`, and `bc`. **EXTREMELY DANGEROUS**: Signs the EIP-712 message and creates the order immediately without any review. Signing authorizes the limit order contract to spend your tokens.
 
+### order-manager
+
+View and analyze limit orders across all statuses (open, partially filled, filled, cancelled, expired). Shows fill progress, transaction history, and portfolio summary.
+
+```
+/order-manager show my orders on ethereum for 0xYourAddress
+/order-manager show filled orders on arbitrum for 0xYourAddress
+/order-manager order summary for 0xYourAddress
+```
+
+Returns: order tables with fill percentage, target/effective price, remaining amounts, fill history with transaction hashes, and actionable suggestions.
+
+### token-info
+
+Look up token metadata (address, decimals, market cap) and live USD price. Useful as reference before placing limit orders or zapping into pools.
+
+```
+/token-info price of ETH on ethereum
+/token-info WBTC on arbitrum
+/token-info check price of LINK, UNI, AAVE on ethereum
+```
+
+Returns: token address, decimals, live USD price (via Aggregator quote), market cap, CMC rank, safety status (honeypot/FOT check), and verification status.
+
+### position-manager
+
+View and analyze DeFi liquidity positions across chains. Shows in-range/out-of-range status, APR, unclaimed fees, earnings, and portfolio summary.
+
+```
+/position-manager show my positions for 0xYourAddress
+/position-manager check positions on ethereum for 0xYourAddress
+/position-manager show closed positions on arbitrum for 0xYourAddress
+```
+
+Returns: portfolio summary (total value, unclaimed fees, earned fees), position tables with APR, price ranges, current amounts, and actionable suggestions for out-of-range positions.
+
 ### zap
 
 Zap into or out of concentrated liquidity positions in one transaction. Handles token ratio calculation, swaps, and deposits automatically via KyberSwap Zap as a Service (ZaaS).
@@ -196,6 +238,11 @@ Liquidity (safe path):
 
 Liquidity (fast path — dangerous):
   /zap-fast ──► on-chain tx (no confirmation)
+
+Portfolio & info (read-only):
+  /token-info      ──► metadata + live price + safety check
+  /order-manager   ──► order list + fill history + analytics
+  /position-manager ──► position list + APR + unclaimed fees
 ```
 
 1. **Claude Code plugin** — Installed as a plugin with auto-discovered skills in the `skills/` directory.
