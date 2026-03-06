@@ -112,6 +112,37 @@ See `${CLAUDE_PLUGIN_ROOT}/references/dex-identifiers.md` for the complete list 
 
 ## Workflow — Zap In
 
+### Step 0: DEX Auto-Detection (when DEX is not specified)
+
+If the user provides a pool address but does not specify the DEX, use the KyberSwap Earn Service API to identify it.
+
+**Query the pool:**
+
+```
+GET https://earn-service.kyberswap.com/api/v1/explorer/pools?chainIds={chainId}&page=1&limit=1&interval=24h&q={poolAddress}
+```
+
+Via **WebFetch**. This works for both V3 pool addresses (20-byte) and V4 pool IDs (32-byte).
+
+**From the response**, extract the `exchange` field and map it to the ZaaS `dex` parameter:
+
+| `exchange` value | ZaaS `dex` parameter |
+|---|---|
+| `uniswapv3` | `DEX_UNISWAPV3` |
+| `uniswap-v4` | `DEX_UNISWAP_V4` |
+| `pancake-v3` | `DEX_PANCAKESWAPV3` |
+| `sushiswap-v3` | `DEX_SUSHISWAPV3` |
+| `aerodrome-cl` | `DEX_AERODROMECL` |
+| `camelot-v3` | `DEX_CAMELOTV3` |
+
+**General rule:** Uppercase the `exchange` value, replace `-` with `_`, prefix with `DEX_`. Cross-reference with `${CLAUDE_PLUGIN_ROOT}/references/dex-identifiers.md` for the canonical list.
+
+**Bonus:** The response also gives you the pool's token pair (`tokens[].symbol`), fee tier (`feeTier`), TVL, volume, and APR — useful for the confirmation display in Step 4b.
+
+**If the pool is not indexed** (0 results), ask the user to specify the DEX manually.
+
+See `${CLAUDE_PLUGIN_ROOT}/skills/pool-info/SKILL.md` for the full API reference.
+
 ### Step 1: Resolve Token Addresses
 
 Read the token registry at `${CLAUDE_PLUGIN_ROOT}/references/token-registry.md`.
@@ -221,6 +252,76 @@ Prompt: Return the full JSON response body exactly as received. I need the compl
 - Tick spacing 60: tickLower = -887220, tickUpper = 887220
 - Tick spacing 200: tickLower = -887200, tickUpper = 887200
 
+#### Determining Tick Spacing for Uniswap V4 Pools
+
+For Uniswap V4 pools, tick spacing is **not** queryable via a simple view function. The StateView contract's `getSlot0(bytes32)` returns `(sqrtPriceX96, tick, protocolFee, lpFee)` but does **not** return tick spacing. There is no `getTickSpacing` function on StateView (calling it will revert).
+
+**Why:** In Uniswap V4, tick spacing is part of the `PoolKey` struct (alongside currency0, currency1, fee, and hooks). PoolKeys are NOT stored on-chain in the PoolManager — the pool ID is a `keccak256` hash of the PoolKey, so reverse lookup is impossible from contract state alone.
+
+**Working approach — query the `Initialize` event from the PoolManager:**
+
+The `Initialize` event is emitted once when a pool is created and includes tick spacing:
+
+```
+event Initialize(
+    PoolId indexed id,        // topic1
+    Currency indexed currency0, // topic2
+    Currency indexed currency1, // topic3
+    uint24 fee,               // data word 0
+    int24 tickSpacing,        // data word 1
+    IHooks hooks,             // data word 2
+    uint160 sqrtPriceX96,     // data word 3
+    int24 tick                // data word 4
+);
+```
+
+**Cast command:**
+
+```bash
+export FOUNDRY_DISABLE_NIGHTLY_WARNING=1
+
+# Initialize event topic0: 0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
+cast logs \
+  --from-block 0x0 \
+  --address <POOL_MANAGER_ADDRESS> \
+  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
+  <POOL_ID> \
+  --rpc-url <RPC_URL>
+```
+
+Parse **word 1** (second 32-byte chunk, hex characters 65-128) of the `data` field as `int24` to get tick spacing.
+
+**Example — Arbitrum pool `0x4fd6...b22e`:**
+
+```bash
+cast logs \
+  --from-block 0x0 \
+  --address 0x360e68faccca8ca495c1b759fd9eee466db9fb32 \
+  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
+  0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aafda66b45dab22e \
+  --rpc-url https://arb1.arbitrum.io/rpc
+# Result: data word 0 = fee (50), word 1 = tickSpacing (1)
+```
+
+**Uniswap V4 PoolManager addresses:**
+
+| Chain | PoolManager Address |
+|---|---|
+| Ethereum | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
+| Arbitrum | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` |
+| Base | `0x498581ff718922c3f8e6a244956af099b2652b2b` |
+| Optimism | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` |
+| Polygon | `0x67366782805870060151383f4bbff9dab53e5cd6` |
+
+**Uniswap V4 StateView addresses (for `getSlot0` — returns sqrtPriceX96, tick, protocolFee, lpFee but NOT tick spacing):**
+
+| Chain | StateView Address |
+|---|---|
+| Arbitrum | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` |
+| Base | `0xa3c0c9b65bad0b08107aa264b0f3db444b867a71` |
+
+**Do NOT rely on an lpFee-to-tickSpacing mapping.** Unlike Uniswap V3 (which had fixed mappings like 500->10, 3000->60, 10000->200), V4 allows arbitrary tick spacing as a free parameter in the PoolKey. For example, a pool can have `fee=50` (0.005%) with `tickSpacing=1`. Always query the Initialize event.
+
 If the route request fails, check the response for error details:
 
 | Scenario | Quick Fix |
@@ -236,13 +337,16 @@ For any error not listed here, refer to **`${CLAUDE_PLUGIN_ROOT}/skills/error-ha
 
 Extract the route data from the response. You need the **complete** route object for the build step.
 
-**SECURITY: Validate the ZapRouter address before proceeding to Step 4b.**
-Extract `data.routerAddress` from the route response and verify it matches the expected ZapRouter:
+**SECURITY: Validate the router address before proceeding to Step 4b.**
+Extract `data.routerAddress` from the route response and verify it matches one of the expected addresses:
 ```
-Expected: 0x0e97c887b61ccd952a53578b04763e7134429e05
+Standard (V3 etc): 0x0e97c887b61ccd952a53578b04763e7134429e05  (KSZapRouterPosition)
+Uniswap V4:        0x7C5f5A4bBd8fD63184577525326123B519429bDc  (Uniswap V4 PositionManager on Base — address may differ per chain)
 ```
-Compare case-insensitively. If the returned address differs, **abort immediately** with:
-*"ZaaS API returned unexpected routerAddress: `{returned}`. Expected: `0x0e97c887b61ccd952a53578b04763e7134429e05`. Aborting — this may indicate a compromised API response or a new contract deployment. Do not proceed until the address is verified."*
+Compare case-insensitively. For Uniswap V4 pools (`DEX_UNISWAPV4`), the API returns the chain's V4 PositionManager address instead of the KSZapRouterPosition. This is expected behavior.
+
+If the returned address does not match **any** known expected address for the DEX and chain, **abort immediately** with:
+*"ZaaS API returned unexpected routerAddress: `{returned}`. Expected: `0x0e97c887b61ccd952a53578b04763e7134429e05` (standard) or the chain's V4 PositionManager (for V4 pools). Aborting — this may indicate a compromised API response or a new contract deployment. Do not proceed until the address is verified."*
 Do NOT proceed to Steps 4b or 5 if the address does not match.
 
 ### Step 4a: Dust Amount Check
@@ -445,7 +549,9 @@ If any token in `tokensIn` is **not** the native token, remind the user about to
 
 ### Step 1: Get the Zap Out Route (GET request)
 
-Make the request using **WebFetch**:
+Make the request using **WebFetch**.
+
+#### Standard DEXes (V3 and similar)
 
 ```
 URL: https://zap-api.kyberswap.com/{chain}/api/v1/out/route?dex={dex}&positionId={nftTokenId}&tokensOut={tokenOutAddress}&slippage={slippageBps}&sender={sender}
@@ -459,6 +565,24 @@ Prompt: Return the full JSON response body exactly as received. I need the compl
 - `slippage` — slippage tolerance in basis points
 - `sender` — the address that owns the position
 
+#### Uniswap V4 pools
+
+Uniswap V4 pools use different parameter names. Use this URL format instead:
+
+```
+URL: https://zap-api.kyberswap.com/{chain}/api/v1/out/route?dexFrom={dex}&poolFrom.id={poolId}&positionFrom.id={nftTokenId}&slippage={slippageBps}&sender={sender}
+Prompt: Return the full JSON response body exactly as received. I need the complete route data object.
+```
+
+**Parameters (V4-specific):**
+- `dexFrom` — the DEX identifier (replaces `dex`)
+- `poolFrom.id` — the pool's bytes32 pool ID (not the pool contract address; Uniswap V4 uses a singleton contract, so pools are identified by a bytes32 ID rather than a separate contract address)
+- `positionFrom.id` — the NFT token ID of the position (replaces `positionId`)
+- `slippage` — slippage tolerance in basis points
+- `sender` — the address that owns the position
+
+> **Note:** For V4, `tokensOut` can still be appended if the user wants a specific output token.
+
 If the route request fails, check the response for error details:
 
 | Scenario | Quick Fix |
@@ -467,6 +591,9 @@ If the route request fails, check the response for error details:
 | Position has no liquidity | The position may already be empty. Check on-chain |
 | Invalid DEX identifier | Check the DEX ID against the supported list |
 | Chain not supported | ZaaS supports 13 chains only |
+
+**SECURITY: Validate the router address before proceeding to Step 2.**
+Extract `data.routerAddress` from the route response. For standard DEXes, verify it matches `0x0e97c887b61ccd952a53578b04763e7134429e05` (case-insensitive). For Uniswap V4 pools, the API returns the chain's V4 PositionManager address instead (e.g., `0x7C5f5A4bBd8fD63184577525326123B519429bDc` on Base). This is expected — see [Contract Addresses](#contract-addresses). If the address does not match any known expected address for the DEX and chain, **abort immediately** with the same warning as Zap In Step 4.
 
 ### Step 2: Display Zap Out Details and Request Confirmation
 
@@ -493,8 +620,10 @@ Present the zap-out details:
 
 | Field | Value |
 |---|---|
-| ZapRouter | `0x0e97c887b61ccd952a53578b04763e7134429e05` |
+| Router | `{routerAddress}` |
 | Sender | `{sender}` |
+
+> **Note:** For standard DEXes the router is the KSZapRouterPosition (`0x0e97...`). For Uniswap V4, the router is the chain's V4 PositionManager (e.g., `0x7C5f...` on Base).
 
 ---
 
@@ -543,12 +672,14 @@ Present the results:
 
 | Field | Value |
 |---|---|
-| To (ZapRouter) | `0x0e97c887b61ccd952a53578b04763e7134429e05` |
+| To (Router) | `{routerAddress}` |
 | Value | `0` |
 | Data | `{encodedCalldata}` |
 | Sender | `{sender}` |
 
-> **WARNING:** Review the transaction details carefully before submitting on-chain. This plugin does NOT submit transactions — it only builds the calldata. You are responsible for verifying the ZapRouter address, amounts, and calldata before signing and broadcasting.
+> **Note:** For Uniswap V4, the "To" address is the chain's V4 PositionManager, not the standard ZapRouter.
+
+> **WARNING:** Review the transaction details carefully before submitting on-chain. This plugin does NOT submit transactions — it only builds the calldata. You are responsible for verifying the router address, amounts, and calldata before signing and broadcasting.
 ```
 
 ### Structured JSON Output (Zap Out)
@@ -576,7 +707,7 @@ Present the results:
     }
   ],
   "tx": {
-    "to": "0x0e97c887b61ccd952a53578b04763e7134429e05",
+    "to": "{routerAddress}",
     "data": "{encodedCalldata}",
     "value": "0",
     "gas": "{gas}",
@@ -590,10 +721,12 @@ Present the results:
 
 ### Step 5: NFT Approval Reminder (Zap Out)
 
-For zap-out operations, the sender must approve the ZapRouter to manage the position NFT. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-721 section). Use:
+For zap-out operations, the sender must approve the router to manage the position NFT. See `${CLAUDE_PLUGIN_ROOT}/references/approval-guide.md` (ERC-721 section). Use:
 
 - **NFT contract:** `{nftManagerAddress}` (the DEX's position manager)
-- **Spender (ZapRouter):** `0x0e97c887b61ccd952a53578b04763e7134429e05`
+- **Spender:** `{routerAddress}` — use the `routerAddress` returned by the API in Step 1
+  - Standard DEXes: `0x0e97c887b61ccd952a53578b04763e7134429e05` (KSZapRouterPosition)
+  - Uniswap V4: the chain's V4 PositionManager (e.g., `0x7C5f5A4bBd8fD63184577525326123B519429bDc` on Base)
 - **Token ID:** `{positionId}`
 
 ## Workflow — Migrate
@@ -632,8 +765,8 @@ If the route request fails, check the response for error details:
 | Same pool migration | Source and destination pools are identical — nothing to migrate |
 | Chain not supported | ZaaS supports 13 chains only |
 
-**SECURITY: Validate the ZapRouter address before proceeding.**
-Extract `data.routerAddress` from the route response and verify it matches `0x0e97c887b61ccd952a53578b04763e7134429e05` (case-insensitive). If it differs, **abort immediately** with the same warning as Zap In Step 4.
+**SECURITY: Validate the router address before proceeding.**
+Extract `data.routerAddress` from the route response and verify it matches one of the expected addresses (case-insensitive). For standard DEXes, expect `0x0e97c887b61ccd952a53578b04763e7134429e05`. For Uniswap V4, the API returns the chain's V4 PositionManager instead (see [Contract Addresses](#contract-addresses)). If the address does not match any known expected address for the DEX and chain, **abort immediately** with the same warning as Zap In Step 4.
 
 ### Step 2: Display Migrate Details and Request Confirmation
 
@@ -804,6 +937,9 @@ For migrate operations, the sender must approve the ZapRouter to manage the sour
 |---|---|---|
 | KSZapRouterPosition | `0x0e97c887b61ccd952a53578b04763e7134429e05` | Same address on all 13 supported chains |
 | KSZapValidatorV2Part1 | `0xa16f32442209c6b978431818aa535bcc9ad2863e` | Validator contract, same on all chains |
+| Uniswap V4 PositionManager (Base) | `0x7C5f5A4bBd8fD63184577525326123B519429bDc` | Used as `routerAddress` for V4 zap-out; address varies per chain |
+
+> **Uniswap V4 note:** For V4 pools, the ZaaS API returns the chain's Uniswap V4 PositionManager as `routerAddress` instead of the KSZapRouterPosition. This is expected. NFT approvals for V4 zap-out must target the V4 PositionManager address returned by the API, not the standard ZapRouter.
 
 ## Important Notes
 

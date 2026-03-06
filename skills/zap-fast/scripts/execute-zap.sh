@@ -48,7 +48,7 @@ ZAP_ROUTER="0x0e97c887b61ccd952a53578b04763e7134429e05"
 get_rpc_url() {
   local chain="$1"
   case "$chain" in
-    ethereum)   echo "https://rpc.ankr.com/eth" ;;
+    ethereum)   echo "https://ethereum-rpc.publicnode.com" ;;
     arbitrum)   echo "https://arb1.arbitrum.io/rpc" ;;
     polygon)    echo "https://polygon-rpc.com" ;;
     optimism)   echo "https://mainnet.optimism.io" ;;
@@ -624,6 +624,7 @@ main() {
     "${wallet_flags[@]}" \
     --gas-limit "$gas" \
     --value "$value" \
+    --timeout 120 \
     --json \
     "$to" \
     "$data" 2>&1) || exit_code=$?
@@ -641,6 +642,7 @@ main() {
         "${wallet_flags[@]}" \
         --gas-limit "$gas" \
         --value "$value" \
+        --timeout 120 \
         --json \
         "$to" \
         "$data" 2>&1) || exit_code=$?

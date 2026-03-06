@@ -154,7 +154,7 @@ get_chain_id() {
 get_rpc_url() {
   local chain="$1"
   case "$chain" in
-    ethereum)   echo "https://rpc.ankr.com/eth" ;;
+    ethereum)   echo "https://ethereum-rpc.publicnode.com" ;;
     arbitrum)   echo "https://arb1.arbitrum.io/rpc" ;;
     polygon)    echo "https://polygon-rpc.com" ;;
     optimism)   echo "https://mainnet.optimism.io" ;;
@@ -323,6 +323,43 @@ resolve_token() {
   return 1
 }
 
+# Convert native token sentinel to wrapped ERC-20 equivalent for limit orders.
+# The Limit Order API requires ERC-20 tokens; native token addresses are rejected.
+# Outputs: "address decimals" or returns 1 if no mapping exists.
+native_to_wrapped() {
+  local chain="$1" chain_id="$2"
+  case "$chain" in
+    ethereum)   echo "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2 18" ;;
+    arbitrum)   echo "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1 18" ;;
+    optimism)   echo "0x4200000000000000000000000000000000000006 18" ;;
+    base)       echo "0x4200000000000000000000000000000000000006 18" ;;
+    linea)      echo "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f 18" ;;
+    polygon)    echo "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270 18" ;;
+    bsc)        echo "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c 18" ;;
+    avalanche)  echo "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7 18" ;;
+    # Chains where the wrapped address must be looked up via Token API
+    unichain|mantle|sonic|berachain|ronin|etherlink|monad)
+      local wrapped_sym
+      case "$chain" in
+        unichain)   wrapped_sym="WETH" ;;
+        mantle)     wrapped_sym="WMNT" ;;
+        sonic)      wrapped_sym="WS" ;;
+        berachain)  wrapped_sym="WBERA" ;;
+        ronin)      wrapped_sym="WRON" ;;
+        etherlink)  wrapped_sym="WXTZ" ;;
+        monad)      wrapped_sym="WMON" ;;
+      esac
+      local result
+      if result=$(resolve_token_api "$chain_id" "$wrapped_sym"); then
+        echo "$result"
+        return 0
+      fi
+      return 1
+      ;;
+    *) return 1 ;;
+  esac
+}
+
 # ── Main ────────────────────────────────────────────────────────────────────
 
 main() {
@@ -449,6 +486,34 @@ main() {
     taker_dec=$(echo "$taker_info" | awk '{print $2}')
     [[ "$taker_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid token address for $taker_asset_sym: $taker_addr"
     log "  ${taker_asset_sym} = ${taker_addr} (${taker_dec} decimals)"
+  fi
+
+  # ── Auto-wrap native tokens for limit orders ──────────────────────────
+  # The Limit Order API requires ERC-20 tokens only. If either asset resolved
+  # to the native sentinel address, convert it to the wrapped ERC-20 equivalent.
+
+  if [[ "$maker_addr" == "$NATIVE" ]]; then
+    local wrapped_maker
+    wrapped_maker=$(native_to_wrapped "$chain" "$chain_id") || \
+      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found."
+    maker_addr=$(echo "$wrapped_maker" | awk '{print $1}')
+    maker_dec=$(echo "$wrapped_maker" | awk '{print $2}')
+    local maker_sym_upper
+    maker_sym_upper=$(echo "$maker_asset_sym" | tr '[:lower:]' '[:upper:]')
+    log "Native ${maker_sym_upper} converted to W${maker_sym_upper} for limit orders"
+    log "  W${maker_sym_upper} = ${maker_addr} (${maker_dec} decimals)"
+  fi
+
+  if [[ "$taker_addr" == "$NATIVE" ]]; then
+    local wrapped_taker
+    wrapped_taker=$(native_to_wrapped "$chain" "$chain_id") || \
+      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found."
+    taker_addr=$(echo "$wrapped_taker" | awk '{print $1}')
+    taker_dec=$(echo "$wrapped_taker" | awk '{print $2}')
+    local taker_sym_upper
+    taker_sym_upper=$(echo "$taker_asset_sym" | tr '[:lower:]' '[:upper:]')
+    log "Native ${taker_sym_upper} converted to W${taker_sym_upper} for limit orders"
+    log "  W${taker_sym_upper} = ${taker_addr} (${taker_dec} decimals)"
   fi
 
   local maker_is_native="false" taker_is_native="false"

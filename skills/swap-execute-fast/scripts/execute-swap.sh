@@ -614,6 +614,7 @@ main() {
     "${wallet_flags[@]}" \
     --gas-limit "$gas" \
     --value "$value" \
+    --timeout 120 \
     --json \
     "$to" \
     "$data" 2>&1) || exit_code=$?
@@ -631,6 +632,7 @@ main() {
         "${wallet_flags[@]}" \
         --gas-limit "$gas" \
         --value "$value" \
+        --timeout 120 \
         --json \
         "$to" \
         "$data" 2>&1) || exit_code=$?

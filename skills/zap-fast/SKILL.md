@@ -135,7 +135,106 @@ Resolve tokenIn before running the script.
 - If `isHoneypot: true` — **refuse the zap** and warn the user.
 - If `isFOT: true` — warn about fee-on-transfer tax. Proceed only if acknowledged.
 
-### Step 0.6: Price Context
+### Step 0.6: DEX Auto-Detection (when DEX is not specified)
+
+If the user provides a pool address but does not specify the DEX, use the KyberSwap Earn Service API to identify it.
+
+**Query the pool:**
+
+```
+GET https://earn-service.kyberswap.com/api/v1/explorer/pools?chainIds={chainId}&page=1&limit=1&interval=24h&q={poolAddress}
+```
+
+Via **WebFetch**. This works for both V3 pool addresses (20-byte) and V4 pool IDs (32-byte).
+
+**From the response**, extract the `exchange` field and map it to the ZaaS `dex` parameter:
+
+| `exchange` value | ZaaS `dex` parameter |
+|---|---|
+| `uniswapv3` | `DEX_UNISWAPV3` |
+| `uniswap-v4` | `DEX_UNISWAP_V4` |
+| `pancake-v3` | `DEX_PANCAKESWAPV3` |
+| `sushiswap-v3` | `DEX_SUSHISWAPV3` |
+| `aerodrome-cl` | `DEX_AERODROMECL` |
+| `camelot-v3` | `DEX_CAMELOTV3` |
+
+**General rule:** Uppercase the `exchange` value, replace `-` with `_`, prefix with `DEX_`. Cross-reference with `${CLAUDE_PLUGIN_ROOT}/references/dex-identifiers.md` for the canonical list.
+
+**If the pool is not indexed** (0 results), ask the user to specify the DEX manually.
+
+See `${CLAUDE_PLUGIN_ROOT}/skills/pool-info/SKILL.md` for the full API reference.
+
+### Step 0.65: Determine Tick Spacing for Uniswap V4 Pools
+
+When a user requests "full range" for a Uniswap V4 pool, you need the pool's tick spacing to compute the correct `tickLower`/`tickUpper`. In V4, tick spacing is **not** queryable via a simple view function — the StateView contract does not expose it, and `getTickSpacing(bytes32)` does not exist (it will revert).
+
+**Why:** In Uniswap V4, tick spacing is part of the `PoolKey` struct (alongside currency0, currency1, fee, and hooks). PoolKeys are NOT stored on-chain in the PoolManager — the pool ID is a `keccak256` hash of the PoolKey, so reverse lookup is impossible from contract state alone.
+
+**Working approach — query the `Initialize` event from the PoolManager:**
+
+The `Initialize` event is emitted once when a pool is created and includes tick spacing:
+
+```
+event Initialize(
+    PoolId indexed id,        // topic1
+    Currency indexed currency0, // topic2
+    Currency indexed currency1, // topic3
+    uint24 fee,               // data word 0
+    int24 tickSpacing,        // data word 1
+    IHooks hooks,             // data word 2
+    uint160 sqrtPriceX96,     // data word 3
+    int24 tick                // data word 4
+);
+```
+
+**Cast command:**
+
+```bash
+export FOUNDRY_DISABLE_NIGHTLY_WARNING=1
+
+# Initialize event topic0: 0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
+cast logs \
+  --from-block 0x0 \
+  --address <POOL_MANAGER_ADDRESS> \
+  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
+  <POOL_ID> \
+  --rpc-url <RPC_URL>
+```
+
+Parse **word 1** (second 32-byte chunk, hex characters 65-128) of the `data` field as `int24` to get tick spacing.
+
+**Example — Arbitrum pool `0x4fd6...b22e`:**
+
+```bash
+cast logs \
+  --from-block 0x0 \
+  --address 0x360e68faccca8ca495c1b759fd9eee466db9fb32 \
+  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
+  0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aafda66b45dab22e \
+  --rpc-url https://arb1.arbitrum.io/rpc
+# Result: data word 0 = fee (50), word 1 = tickSpacing (1)
+```
+
+**Uniswap V4 PoolManager addresses:**
+
+| Chain | PoolManager Address |
+|---|---|
+| Ethereum | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
+| Arbitrum | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` |
+| Base | `0x498581ff718922c3f8e6a244956af099b2652b2b` |
+| Optimism | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` |
+| Polygon | `0x67366782805870060151383f4bbff9dab53e5cd6` |
+
+**Uniswap V4 StateView addresses (for `getSlot0` — returns sqrtPriceX96, tick, protocolFee, lpFee but NOT tick spacing):**
+
+| Chain | StateView Address |
+|---|---|
+| Arbitrum | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` |
+| Base | `0xa3c0c9b65bad0b08107aa264b0f3db444b867a71` |
+
+**Do NOT rely on an lpFee-to-tickSpacing mapping.** Unlike Uniswap V3 (which had fixed mappings like 500->10, 3000->60, 10000->200), V4 allows arbitrary tick spacing as a free parameter in the PoolKey. For example, a pool can have `fee=50` (0.005%) with `tickSpacing=1`. Always query the Initialize event.
+
+### Step 0.7: Price Context
 
 Before executing the fast zap, fetch the current USD price of the input token to validate the zap value. Use the KyberSwap Aggregator:
 
@@ -250,6 +349,8 @@ bash execute-zap.sh ETH 0.5 0xPoolAddress uniswapv3 -1000 1000 polygon 0xSender 
 
 ### Step 3: Format the Output
 
+> **IMPORTANT: Do not duplicate output.** The script's raw output (stderr log lines and stdout JSON) is already visible to the user from the Bash tool call in Step 1. Do NOT echo, quote, or re-display the raw script output. Only present the formatted summary below, which extracts key fields from the JSON. If you repeat the raw output AND show the formatted summary, the user sees every line twice.
+
 **On success**, present:
 
 ```
@@ -286,7 +387,7 @@ bash execute-zap.sh ETH 0.5 0xPoolAddress uniswapv3 -1000 1000 polygon 0xSender 
 | `KEYSTORE_PASSWORD_FILE` | Override default `~/.foundry/.password` |
 | `RPC_URL_OVERRIDE` | Override chain RPC URL |
 | `FAST_ZAP_MAX_USD` | Override $1000 USD safety threshold (default: 1000) |
-| `EXPECTED_ZAP_ROUTER_OVERRIDE` | Override expected ZapRouter address for verification |
+| `EXPECTED_ZAP_ROUTER_OVERRIDE` | Override expected ZapRouter address for verification (e.g., for Uniswap V4 pools that return the V4 PositionManager instead of the standard ZapRouter) |
 
 ## Supported Chains
 
@@ -352,4 +453,4 @@ For errors not covered above (full API error catalog, advanced debugging), refer
 | `Password file not found` | Create `~/.foundry/.password` with your keystore password |
 | `PRIVATE_KEY not set` | Export `PRIVATE_KEY=0x...` or use keystore method |
 | `Unknown chain` | Set `RPC_URL_OVERRIDE` environment variable |
-| `Unexpected router address` | The API returned a different router than expected. This is a safety check. If KyberSwap deployed a new ZapRouter, set `EXPECTED_ZAP_ROUTER_OVERRIDE`. |
+| `Unexpected router address` | The API returned a different router than expected. This is a safety check. For Uniswap V4 pools, the API returns the V4 PositionManager instead of the standard ZapRouter — set `EXPECTED_ZAP_ROUTER_OVERRIDE` to the V4 PositionManager address for the target chain (e.g., `0x7C5f5A4bBd8fD63184577525326123B519429bDc` on Base). If KyberSwap deployed a new ZapRouter, set the override accordingly. |
