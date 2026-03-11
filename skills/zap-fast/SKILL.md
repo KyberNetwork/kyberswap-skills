@@ -166,73 +166,73 @@ See `${CLAUDE_PLUGIN_ROOT}/skills/pool-info/SKILL.md` for the full API reference
 
 ### Step 0.65: Determine Tick Spacing for Uniswap V4 Pools
 
-When a user requests "full range" for a Uniswap V4 pool, you need the pool's tick spacing to compute the correct `tickLower`/`tickUpper`. In V4, tick spacing is **not** queryable via a simple view function — the StateView contract does not expose it, and `getTickSpacing(bytes32)` does not exist (it will revert).
+When a user requests "full range" for a Uniswap V4 pool, you need the pool's tick spacing to compute the correct `tickLower`/`tickUpper`. In V4, tick spacing is a free parameter (not fixed per fee tier like V3), so you must query it.
 
-**Why:** In Uniswap V4, tick spacing is part of the `PoolKey` struct (alongside currency0, currency1, fee, and hooks). PoolKeys are NOT stored on-chain in the PoolManager — the pool ID is a `keccak256` hash of the PoolKey, so reverse lookup is impossible from contract state alone.
 
-**Working approach — query the `Initialize` event from the PoolManager:**
+**Approach — call `poolKeys` on the Uniswap V4 PositionManager:**
 
-The `Initialize` event is emitted once when a pool is created and includes tick spacing:
+
+The PositionManager contract has a public `poolKeys(bytes25)` function that returns the full `PoolKey` struct including tick spacing:
+
 
 ```
-event Initialize(
-    PoolId indexed id,        // topic1
-    Currency indexed currency0, // topic2
-    Currency indexed currency1, // topic3
-    uint24 fee,               // data word 0
-    int24 tickSpacing,        // data word 1
-    IHooks hooks,             // data word 2
-    uint160 sqrtPriceX96,     // data word 3
-    int24 tick                // data word 4
-);
+poolKeys(bytes25 poolId) returns (address currency0, address currency1, uint24 fee, int24 tickSpacing, address hooks)
 ```
+
+
+**Important:** The PositionManager uses `bytes25` (the first 25 bytes of the 32-byte pool ID). When calling, truncate the pool ID to 25 bytes (keep `0x` + first 50 hex characters).
+
 
 **Cast command:**
+
 
 ```bash
 export FOUNDRY_DISABLE_NIGHTLY_WARNING=1
 
-# Initialize event topic0: 0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
-cast logs \
-  --from-block 0x0 \
-  --address <POOL_MANAGER_ADDRESS> \
-  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
-  <POOL_ID> \
+
+# Truncate 32-byte pool ID to 25 bytes: keep first 50 hex chars after 0x
+POOL_ID_25="0x$(echo '<POOL_ID_32>' | sed 's/^0x//' | cut -c1-50)"
+
+
+cast call <POSITION_MANAGER_ADDRESS> \
+  "poolKeys(bytes25)(address,address,uint24,int24,address)" \
+  "$POOL_ID_25" \
   --rpc-url <RPC_URL>
 ```
 
-Parse **word 1** (second 32-byte chunk, hex characters 65-128) of the `data` field as `int24` to get tick spacing.
 
-**Example — Arbitrum pool `0x4fd6...b22e`:**
+The 4th return value is `tickSpacing` (int24).
+
+
+**Example — Arbitrum pool `0xd88f3...d869`:**
+
 
 ```bash
-cast logs \
-  --from-block 0x0 \
-  --address 0x360e68faccca8ca495c1b759fd9eee466db9fb32 \
-  0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438 \
-  0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aafda66b45dab22e \
+# Full pool ID: 0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aafda66b45dab22e
+# Truncated to bytes25: 0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aa
+
+
+cast call 0xd88f38f930b7952f2db2432cb002e7abbf3dd869 \
+  "poolKeys(bytes25)(address,address,uint24,int24,address)" \
+  0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aa \
   --rpc-url https://arb1.arbitrum.io/rpc
-# Result: data word 0 = fee (50), word 1 = tickSpacing (1)
+# Result: tickSpacing = 1
 ```
 
-**Uniswap V4 PoolManager addresses:**
 
-| Chain | PoolManager Address |
+**Uniswap V4 PositionManager addresses:**
+
+
+| Chain | PositionManager Address |
 |---|---|
-| Ethereum | `0x000000000004444c5dc75cB358380D2e3dE08A90` |
-| Arbitrum | `0x360e68faccca8ca495c1b759fd9eee466db9fb32` |
-| Base | `0x498581ff718922c3f8e6a244956af099b2652b2b` |
-| Optimism | `0x9a13f98cb987694c9f086b1f5eb990eea8264ec3` |
-| Polygon | `0x67366782805870060151383f4bbff9dab53e5cd6` |
+| Ethereum | `0xbd216513d74c8cf14cf4747e6aaa6420ff64ee9e` |
+| Arbitrum |  `0xd88f38f930b7952f2db2432cb002e7abbf3dd869` |
+| Base | `0x7c5f5a4bbd8fd63184577525326123b519429bdc` |
+| Optimism | `0x3c3ea4b57a46241e54610e5f022e5c45859a1017` |
+| Polygon | `0x1ec2ebf4f37e7363fdfe3551602425af0b3ceef9` |
 
-**Uniswap V4 StateView addresses (for `getSlot0` — returns sqrtPriceX96, tick, protocolFee, lpFee but NOT tick spacing):**
 
-| Chain | StateView Address |
-|---|---|
-| Arbitrum | `0x76fd297e2d437cd7f76d50f01afe6160f86e9990` |
-| Base | `0xa3c0c9b65bad0b08107aa264b0f3db444b867a71` |
-
-**Do NOT rely on an lpFee-to-tickSpacing mapping.** Unlike Uniswap V3 (which had fixed mappings like 500->10, 3000->60, 10000->200), V4 allows arbitrary tick spacing as a free parameter in the PoolKey. For example, a pool can have `fee=50` (0.005%) with `tickSpacing=1`. Always query the Initialize event.
+**Do NOT rely on an lpFee-to-tickSpacing mapping.** Unlike Uniswap V3 (which had fixed mappings like 500->10, 3000->60, 10000->200), V4 allows arbitrary tick spacing as a free parameter in the PoolKey. For example, a pool can have `fee=50` (0.005%) with `tickSpacing=1`. Always query `poolKeys` on the PositionManager.
 
 ### Step 0.7: Price Context
 
