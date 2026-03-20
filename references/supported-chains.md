@@ -47,8 +47,8 @@ Ethereum, BNB Smart Chain, Arbitrum, Polygon, Optimism, Base, Avalanche, Linea, 
 | Base | ✅ | ✅ | ✅ |
 | Avalanche | ✅ | ✅ | ✅ |
 | Linea | ✅ | ✅ | ✅ |
-| Scroll | ✅ | ✅ | ✅ |
-| zkSync | ✅ | ✅ | ✅ |
+| Scroll | ❌ | ❌ | ✅ |
+| zkSync | ❌ | ❌ | ✅ |
 | Sonic | ✅ | ✅ | ✅ |
 | Berachain | ✅ | ✅ | ✅ |
 | Ronin | ✅ | ✅ | ✅ |

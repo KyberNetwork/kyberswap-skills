@@ -61,7 +61,7 @@ to_wei() {
 
   # Validate: must be a non-negative number (digits with optional single dot)
   if ! [[ "$amount" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    die "Invalid amount for to_wei: '$amount'. Must be a non-negative number."
+    die "Invalid amount for to_wei: '$amount'. Must be a non-negative number. No transaction was submitted."
   fi
 
   if [[ "$amount" == *.* ]]; then
@@ -365,7 +365,7 @@ native_to_wrapped() {
 main() {
   # Check dependencies
   for cmd in curl jq cast; do
-    command -v "$cmd" &>/dev/null || die "Required command not found: ${cmd}. Install it and try again."
+    command -v "$cmd" &>/dev/null || die "Required command not found: ${cmd}. Install it and try again. No transaction was submitted."
   done
 
   # Parse arguments
@@ -386,12 +386,20 @@ main() {
 
   # Validate amount
   if ! [[ "$amount" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    die "Invalid amount: '$amount'. Must be a non-negative number (e.g. 1, 0.5, 100)."
+    die "Invalid amount: '$amount'. Must be a non-negative number (e.g. 1, 0.5, 100). No transaction was submitted."
+  fi
+  # Reject zero amount
+  if [[ "$(echo "$amount" | sed 's/[0.]//g')" == "" ]]; then
+    die "Amount must be greater than zero. No transaction was submitted."
   fi
 
   # Validate target price
   if ! [[ "$target_price" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    die "Invalid target price: '$target_price'. Must be a non-negative number."
+    die "Invalid target price: '$target_price'. Must be a non-negative number. No transaction was submitted."
+  fi
+  # Reject zero target price
+  if [[ "$(echo "$target_price" | sed 's/[0.]//g')" == "" ]]; then
+    die "Target price must be greater than zero. No transaction was submitted."
   fi
 
   # Validate token inputs: either a symbol or pre-resolved address:decimals
@@ -400,53 +408,53 @@ main() {
   elif [[ "$maker_asset_sym" =~ ^[a-zA-Z0-9.]+$ ]]; then
     :  # Symbol
   else
-    die "Invalid makerAsset: $maker_asset_sym. Must be a symbol (e.g. ETH) or address:decimals (e.g. 0xA0b8...:6)"
+    die "Invalid makerAsset: $maker_asset_sym. Must be a symbol (e.g. ETH) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
   fi
   if [[ "$taker_asset_sym" =~ ^0x[a-fA-F0-9]{40}:[0-9]+$ ]]; then
     :  # Pre-resolved address:decimals
   elif [[ "$taker_asset_sym" =~ ^[a-zA-Z0-9.]+$ ]]; then
     :  # Symbol
   else
-    die "Invalid takerAsset: $taker_asset_sym. Must be a symbol (e.g. USDC) or address:decimals (e.g. 0xA0b8...:6)"
+    die "Invalid takerAsset: $taker_asset_sym. Must be a symbol (e.g. USDC) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
   fi
 
   # Validate maker address
-  [[ "$maker" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid maker address: $maker"
+  [[ "$maker" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid maker address: $maker. No transaction was submitted."
   local maker_lower
   maker_lower=$(echo "$maker" | tr '[:upper:]' '[:lower:]')
   if [[ "$maker_lower" == "0x0000000000000000000000000000000000000000" ]]; then
-    die "Cannot use zero address as maker. Please provide your actual wallet address."
+    die "Cannot use zero address as maker. Please provide your actual wallet address. No transaction was submitted."
   fi
   if [[ "$maker_lower" == "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" ]]; then
-    die "Cannot use the native token sentinel address as maker. Please provide your actual wallet address."
+    die "Cannot use the native token sentinel address as maker. Please provide your actual wallet address. No transaction was submitted."
   fi
 
   # Validate expiry_seconds
   if ! [[ "$expiry_seconds" =~ ^[0-9]+$ ]]; then
-    die "Invalid expiry_seconds: '$expiry_seconds'. Must be a positive integer (seconds)."
+    die "Invalid expiry_seconds: '$expiry_seconds'. Must be a positive integer (seconds). No transaction was submitted."
   fi
   if (( expiry_seconds < 60 )); then
-    die "Expiry too short: ${expiry_seconds}s. Minimum is 60 seconds."
+    die "Expiry too short: ${expiry_seconds}s. Minimum is 60 seconds. No transaction was submitted."
   fi
   if (( expiry_seconds > 31536000 )); then
-    die "Expiry too long: ${expiry_seconds}s. Maximum is 31536000 seconds (365 days)."
+    die "Expiry too long: ${expiry_seconds}s. Maximum is 31536000 seconds (365 days). No transaction was submitted."
   fi
 
   # Validate wallet_method
   case "$wallet_method" in
     keystore|env|ledger|trezor) ;;
-    *) die "Unknown wallet method '$wallet_method'. Use: keystore, env, ledger, trezor." ;;
+    *) die "Unknown wallet method '$wallet_method'. Use: keystore, env, ledger, trezor. No transaction was submitted." ;;
   esac
 
   # Validate keystore_name
   if [[ -n "$keystore_name" ]] && ! [[ "$keystore_name" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-    die "Invalid keystore name '$keystore_name'. Must contain only letters, digits, underscores, dots, and hyphens."
+    die "Invalid keystore name '$keystore_name'. Must contain only letters, digits, underscores, dots, and hyphens. No transaction was submitted."
   fi
 
   # Validate chain
   local chain_id
   chain_id=$(get_chain_id "$chain") || \
-    die "Unsupported chain for limit orders: ${chain}. Supported: ethereum, bsc, arbitrum, polygon, optimism, avalanche, base, linea, mantle, sonic, berachain, ronin, unichain, hyperevm, plasma, etherlink, monad"
+    die "Unsupported chain for limit orders: ${chain}. Supported: ethereum, bsc, arbitrum, polygon, optimism, avalanche, base, linea, mantle, sonic, berachain, ronin, unichain, hyperevm, plasma, etherlink, monad. No transaction was submitted."
 
   log "Creating limit order: sell ${amount} ${maker_asset_sym} for ${taker_asset_sym} at ${target_price} on ${chain}"
   log "Maker: $maker"
@@ -465,10 +473,10 @@ main() {
     log "Resolving ${maker_asset_sym} on ${chain}..."
     local maker_info
     maker_info=$(resolve_token "$chain" "$maker_asset_sym" "$chain_id") || \
-      die "Token '${maker_asset_sym}' not found on ${chain}. Verify the symbol or provide a contract address."
+      die "Token '${maker_asset_sym}' not found on ${chain}. Verify the symbol or provide a contract address. No transaction was submitted."
     maker_addr=$(echo "$maker_info" | awk '{print $1}')
     maker_dec=$(echo "$maker_info" | awk '{print $2}')
-    [[ "$maker_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid token address for $maker_asset_sym: $maker_addr"
+    [[ "$maker_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid token address for $maker_asset_sym: $maker_addr. No transaction was submitted."
     log "  ${maker_asset_sym} = ${maker_addr} (${maker_dec} decimals)"
   fi
 
@@ -481,10 +489,10 @@ main() {
     log "Resolving ${taker_asset_sym} on ${chain}..."
     local taker_info
     taker_info=$(resolve_token "$chain" "$taker_asset_sym" "$chain_id") || \
-      die "Token '${taker_asset_sym}' not found on ${chain}. Verify the symbol or provide a contract address."
+      die "Token '${taker_asset_sym}' not found on ${chain}. Verify the symbol or provide a contract address. No transaction was submitted."
     taker_addr=$(echo "$taker_info" | awk '{print $1}')
     taker_dec=$(echo "$taker_info" | awk '{print $2}')
-    [[ "$taker_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid token address for $taker_asset_sym: $taker_addr"
+    [[ "$taker_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid token address for $taker_asset_sym: $taker_addr. No transaction was submitted."
     log "  ${taker_asset_sym} = ${taker_addr} (${taker_dec} decimals)"
   fi
 
@@ -495,7 +503,7 @@ main() {
   if [[ "$maker_addr" == "$NATIVE" ]]; then
     local wrapped_maker
     wrapped_maker=$(native_to_wrapped "$chain" "$chain_id") || \
-      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found."
+      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found. No transaction was submitted."
     maker_addr=$(echo "$wrapped_maker" | awk '{print $1}')
     maker_dec=$(echo "$wrapped_maker" | awk '{print $2}')
     local maker_sym_upper
@@ -507,7 +515,7 @@ main() {
   if [[ "$taker_addr" == "$NATIVE" ]]; then
     local wrapped_taker
     wrapped_taker=$(native_to_wrapped "$chain" "$chain_id") || \
-      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found."
+      die "Cannot auto-wrap native token on ${chain}: no wrapped token mapping found. No transaction was submitted."
     taker_addr=$(echo "$wrapped_taker" | awk '{print $1}')
     taker_dec=$(echo "$wrapped_taker" | awk '{print $2}')
     local taker_sym_upper
@@ -538,7 +546,7 @@ main() {
     tax=$(echo "$resp" | jq -r '.data.tax // 0' 2>/dev/null) || return 0
 
     if [[ "$hp" == "true" ]]; then
-      die "HONEYPOT DETECTED: ${symbol} (${addr}) is flagged as a honeypot. You will not be able to sell this token. Order creation aborted."
+      die "HONEYPOT DETECTED: ${symbol} (${addr}) is flagged as a honeypot. You will not be able to sell this token. Order creation aborted. No transaction was submitted."
     fi
 
     if [[ "$fot" == "true" ]]; then
@@ -554,29 +562,32 @@ main() {
 
   local making_amount_wei
   making_amount_wei=$(to_wei "$amount" "$maker_dec")
+  if [[ "$making_amount_wei" == "0" ]]; then
+    die "Making amount converts to 0 wei (amount too small for token decimals). No transaction was submitted."
+  fi
   log "Making amount: ${amount} ${maker_asset_sym} = ${making_amount_wei} wei"
 
   # Calculate takingAmount = makingAmount * targetPrice
   # Use bc for precision with arbitrary-precision decimals
-  command -v bc &>/dev/null || die "bc is required for price calculation. Install it and try again."
+  command -v bc &>/dev/null || die "bc is required for price calculation. Install it and try again. No transaction was submitted."
 
   # Validate target_price is numeric before bc call (injection guard)
   if ! [[ "$target_price" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    die "Invalid target price for calculation: '$target_price'."
+    die "Invalid target price for calculation: '$target_price'. No transaction was submitted."
   fi
   if ! [[ "$amount" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    die "Invalid amount for calculation: '$amount'."
+    die "Invalid amount for calculation: '$amount'. No transaction was submitted."
   fi
 
   local taking_amount
   taking_amount=$(echo "scale=18; $amount * $target_price" | bc -l 2>/dev/null) || \
-    die "Failed to calculate taking amount. Verify amount and target price are valid numbers."
+    die "Failed to calculate taking amount. Verify amount and target price are valid numbers. No transaction was submitted."
 
   # Strip trailing zeros and possible leading dot
   taking_amount=$(echo "$taking_amount" | sed 's/0*$//; s/\.$//')
   # Handle bc output that starts with "." (e.g. ".5")
   [[ "$taking_amount" == .* ]] && taking_amount="0${taking_amount}"
-  [[ -z "$taking_amount" || "$taking_amount" == "0" ]] && die "Calculated taking amount is zero. Verify target price is positive."
+  [[ -z "$taking_amount" || "$taking_amount" == "0" ]] && die "Calculated taking amount is zero. Verify target price is positive. No transaction was submitted."
 
   local taking_amount_wei
   taking_amount_wei=$(to_wei "$taking_amount" "$taker_dec")
@@ -616,7 +627,7 @@ main() {
       [[ -z "$usd_value" ]] && usd_value="0"
       log "Estimated order value: \$${usd_value} USD (${amount} × \$${token_price})"
       if (( $(echo "$usd_value > $max_usd" | bc -l 2>/dev/null || echo 0) )); then
-        die "Order value \$${usd_value} USD exceeds fast-execution safety limit of \$${max_usd} USD. Use /limit-order for large orders. To raise the limit: FAST_LIMIT_ORDER_MAX_USD=<new_limit>"
+        die "Order value \$${usd_value} USD exceeds fast-execution safety limit of \$${max_usd} USD. Use /limit-order for large orders. To raise the limit: FAST_LIMIT_ORDER_MAX_USD=<new_limit>. No transaction was submitted."
       fi
     fi
   fi
@@ -628,7 +639,7 @@ main() {
   contract_resp=$(curl -s --connect-timeout 10 --max-time 30 \
     "${LO_API}/read-ks/api/v1/configs/contract-address?chainId=${chain_id}" \
     -H "X-Client-Id: ${CLIENT_ID}" 2>/dev/null) || \
-    die "Network error: failed to reach KyberSwap limit order config API."
+    die "Network error: failed to reach KyberSwap limit order config API. No transaction was submitted."
 
   contract_addr=$(echo "$contract_resp" | jq -r '.data.contractAddress // empty' 2>/dev/null)
 
@@ -637,7 +648,7 @@ main() {
     contract_addr="$DSLO_CONTRACT"
   fi
 
-  [[ "$contract_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid DSLOProtocol contract address: $contract_addr"
+  [[ "$contract_addr" =~ ^0x[a-fA-F0-9]{40}$ ]] || die "Invalid DSLOProtocol contract address: $contract_addr. No transaction was submitted."
 
   # Cross-check API-returned address against known-good (defense against compromised API)
   local expected_contract="${CONTRACT_ADDR_OVERRIDE:-$DSLO_CONTRACT}"
@@ -648,7 +659,7 @@ main() {
     if [[ -n "${CONTRACT_ADDR_OVERRIDE:-}" ]]; then
       log "WARNING: Using CONTRACT_ADDR_OVERRIDE: $contract_addr"
     else
-      die "Unexpected DSLOProtocol address: $contract_addr (expected: $DSLO_CONTRACT). This may indicate a new contract deployment or a compromised API response. Set CONTRACT_ADDR_OVERRIDE=<address> to proceed with the new address."
+      die "Unexpected DSLOProtocol address: $contract_addr (expected: $DSLO_CONTRACT). This may indicate a new contract deployment or a compromised API response. Set CONTRACT_ADDR_OVERRIDE=<address> to proceed with the new address. No transaction was submitted."
     fi
   fi
   log "DSLOProtocol contract: ${contract_addr}"
@@ -665,7 +676,7 @@ main() {
   case "$wallet_method" in
     keystore)
       if [[ ! -f "$PASSWORD_FILE" ]]; then
-        die "Password file not found: $PASSWORD_FILE. Create it or set KEYSTORE_PASSWORD_FILE."
+        die "Password file not found: $PASSWORD_FILE. Create it or set KEYSTORE_PASSWORD_FILE. No transaction was submitted."
       fi
       local pw_perms
       if [[ "$(uname)" == "Darwin" ]]; then
@@ -674,18 +685,18 @@ main() {
         pw_perms=$(stat -c '%a' "$PASSWORD_FILE" 2>/dev/null || echo "unknown")
       fi
       if [[ "$pw_perms" != "600" && "$pw_perms" != "unknown" ]]; then
-        die "Password file $PASSWORD_FILE has insecure permissions ($pw_perms). Required: 600. Fix with: chmod 600 $PASSWORD_FILE"
+        die "Password file $PASSWORD_FILE has insecure permissions ($pw_perms). Required: 600. Fix with: chmod 600 $PASSWORD_FILE. No transaction was submitted."
       fi
       local keystore_dir="${HOME}/.foundry/keystores"
       if [[ ! -f "${keystore_dir}/${keystore_name}" ]]; then
-        die "Keystore '${keystore_name}' not found in ${keystore_dir}. List keystores with: cast wallet list"
+        die "Keystore '${keystore_name}' not found in ${keystore_dir}. List keystores with: cast wallet list. No transaction was submitted."
       fi
       wallet_flags=(--account "$keystore_name" --password-file "$PASSWORD_FILE")
       log "Using keystore: $keystore_name"
       ;;
     env)
       if [[ -z "${PRIVATE_KEY:-}" ]]; then
-        die "PRIVATE_KEY environment variable not set."
+        die "PRIVATE_KEY environment variable not set. No transaction was submitted."
       fi
       export ETH_PRIVATE_KEY="$PRIVATE_KEY"
       wallet_flags=()
@@ -730,7 +741,7 @@ main() {
       if (( $(echo "$balance_dec < $making_amount_wei" | bc -l 2>/dev/null || echo 0) )); then
         local balance_human
         balance_human=$(from_wei "$balance_dec" "$maker_dec")
-        die "Insufficient ${maker_asset_sym} balance: ${balance_human} ${maker_asset_sym} available, but order requires ${amount} ${maker_asset_sym}."
+        die "Insufficient ${maker_asset_sym} balance: ${balance_human} ${maker_asset_sym} available, but order requires ${amount} ${maker_asset_sym}. No transaction was submitted."
       fi
       log "Balance OK: $(from_wei "$balance_dec" "$maker_dec") ${maker_asset_sym}"
     fi
@@ -762,6 +773,7 @@ main() {
         local approve_output approve_exit_code=0
         approve_output=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast send \
           --rpc-url "$rpc_url" \
+          --timeout 120 \
           "${wallet_flags[@]}" \
           "$maker_addr" \
           "approve(address,uint256)" \
@@ -769,13 +781,20 @@ main() {
           "$making_amount_wei" 2>&1) || approve_exit_code=$?
 
         if [[ $approve_exit_code -ne 0 ]]; then
-          die "Token approval transaction failed. Cannot create limit order without approval. Error: $(echo "$approve_output" | tail -3)"
+          local safe_approve_output
+          safe_approve_output=$(echo "$approve_output" | tail -3 | sed -E \
+            -e 's/--private-key [^ ]*/--private-key [REDACTED]/g' \
+            -e 's/"private[Kk]ey"[[:space:]]*:[[:space:]]*"[^"]*"/"privateKey": "[REDACTED]"/g' \
+            -e 's/ETH_PRIVATE_KEY=[^ ]*/ETH_PRIVATE_KEY=[REDACTED]/g' \
+            -e 's/PRIVATE_KEY=[^ ]*/PRIVATE_KEY=[REDACTED]/g' \
+            -e 's/0x[a-fA-F0-9]{64}/[REDACTED_HEX]/g')
+          die "Token approval transaction failed. Cannot create limit order without approval. Transaction was broadcast. Error: ${safe_approve_output}"
         fi
 
         local approve_status
         approve_status=$(echo "$approve_output" | grep -i '^status' | awk '{print $2}')
         if [[ "$approve_status" != "1" && "$approve_status" != "1 (success)" ]]; then
-          die "Token approval transaction reverted (status: ${approve_status}). Check token contract or gas."
+          die "Token approval transaction reverted (status: ${approve_status}). Check token contract or gas. Transaction was broadcast."
         fi
 
         local approve_hash

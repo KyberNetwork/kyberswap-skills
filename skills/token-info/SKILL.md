@@ -54,6 +54,7 @@ Use the KyberSwap Token API fallback:
 
 ```
 GET https://token-api.kyberswap.com/api/v1/public/tokens?chainIds={chainId}&name={symbol}&isWhitelisted=true
+Header: X-Client-Id: ai-agent-skills
 ```
 
 Via **WebFetch**. Pick the result whose `symbol` matches exactly with the highest `marketCap`. If no whitelisted match, retry without `isWhitelisted` (only trust verified or market-cap tokens). If still nothing, browse `page=1&pageSize=100` (try up to 3 pages).
@@ -66,6 +67,7 @@ If the token was resolved from the registry, fetch additional metadata from the 
 
 ```
 GET https://token-api.kyberswap.com/api/v1/public/tokens?chainIds={chainId}&name={symbol}
+Header: X-Client-Id: ai-agent-skills
 ```
 
 Via **WebFetch**. Extract these fields from the matching result:
@@ -90,6 +92,7 @@ For any token **not** in the built-in registry and **not** a native token, check
 
 ```
 GET https://token-api.kyberswap.com/api/v1/public/tokens/honeypot-fot-info?chainId={chainId}&address={tokenAddress}
+Header: X-Client-Id: ai-agent-skills
 ```
 
 Via **WebFetch**, check each token:

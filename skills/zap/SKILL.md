@@ -301,7 +301,7 @@ The 4th return value is `tickSpacing` (int24).
 # Truncated to bytes25: 0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aa
 
 
-cast call 0x7C5f5A4bBd8fD63184577525326123B519429bDc \
+cast call 0xd88f38f930b7952f2db2432cb002e7abbf3dd869 \
   "poolKeys(bytes25)(address,address,uint24,int24,address)" \
   0x4fd69d55704d8c40ebbd6d0086f1c827eed02bfb4a42cea8aa \
   --rpc-url https://arb1.arbitrum.io/rpc

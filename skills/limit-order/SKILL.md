@@ -214,7 +214,7 @@ curl -s --connect-timeout 10 --max-time 30 \
     "makerAsset": "{makerAssetAddress}",
     "takerAsset": "{takerAssetAddress}",
     "maker": "{makerAddress}",
-    "allowedSenders": "0x0000000000000000000000000000000000000000",
+    "allowedSenders": ["0x0000000000000000000000000000000000000000"],
     "makingAmount": "{makingAmountWei}",
     "takingAmount": "{takingAmountWei}",
     "expiredAt": {expiryTimestamp}
@@ -308,7 +308,7 @@ curl -s --connect-timeout 10 --max-time 30 \
     "makerAsset": "{makerAssetAddress}",
     "takerAsset": "{takerAssetAddress}",
     "maker": "{makerAddress}",
-    "allowedSenders": "0x0000000000000000000000000000000000000000",
+    "allowedSenders": ["0x0000000000000000000000000000000000000000"],
     "makingAmount": "{makingAmountWei}",
     "takingAmount": "{takingAmountWei}",
     "expiredAt": {expiryTimestamp},

@@ -31,7 +31,7 @@
 set -euo pipefail
 
 # Ensure ETH_PRIVATE_KEY is always cleared on exit (normal, error, or signal)
-trap 'unset ETH_PRIVATE_KEY 2>/dev/null' EXIT
+trap 'unset ETH_PRIVATE_KEY PRIVATE_KEY 2>/dev/null' EXIT INT TERM
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -253,6 +253,10 @@ main() {
   # H-5: Validate slippage_bps and keystore_name
   if [[ -n "$slippage_bps" ]] && ! [[ "$slippage_bps" =~ ^[0-9]+$ ]]; then
     json_output false "Swap failed (pre-flight): Invalid slippage '$slippage_bps'. Must be a non-negative integer (basis points). No transaction was submitted."
+    exit 1
+  fi
+  if (( slippage_bps > 2000 )); then
+    json_output false "Swap failed (pre-flight): Slippage ${slippage_bps} bps exceeds maximum of 2000 bps (20%). No transaction was submitted."
     exit 1
   fi
   if [[ -n "$keystore_name" ]] && ! [[ "$keystore_name" =~ ^[a-zA-Z0-9_.-]+$ ]]; then

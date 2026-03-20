@@ -100,6 +100,8 @@ If the user does not specify slippage, choose based on the token:
 | Common tokens (e.g. ETH, WBTC) | **100 bps** (1.00%) | Standard volatility buffer for multi-step zap |
 | All other / unknown tokens | **100 bps** (1.00%) | Conservative default for long-tail or volatile tokens |
 
+> **Why higher than `/zap`?** These defaults are intentionally higher than `/zap` (which uses 5/50/100 bps) because fast execution has no confirmation gate — higher slippage reduces the chance of transaction failure.
+
 > **Note:** The underlying `execute-zap.sh` script defaults to 100 bps if no slippage argument is passed. **You must calculate and pass the correct slippage value** from this table as argument 9 when calling the script.
 
 **Known stablecoins:** USDC, USDT, DAI, BUSD, FRAX, LUSD, USDC.e, USDT.e, TUSD

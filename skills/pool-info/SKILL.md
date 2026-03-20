@@ -118,6 +118,8 @@ GET https://earn-service.kyberswap.com/api/v1/explorer/pools?chainIds={chainId}&
 GET https://earn-service.kyberswap.com/api/v1/explorer/pools?chainIds={chainId}&page=1&limit={limit}&interval=24h&sortBy={sortBy}&orderBy=DESC&protocol={protocol}&q={searchQuery}
 ```
 
+Add the `X-Client-Id: ai-agent-skills` header.
+
 ### Step 3: Handle Empty Results
 
 If the API returns 0 results:
@@ -198,6 +200,19 @@ GET https://earn-service.kyberswap.com/api/v1/explorer/pools?chainIds={chainId}&
 Extract the `exchange` field and map it to the ZaaS `dex` parameter using the [Exchange to ZaaS DEX ID Mapping](#exchange-to-zaas-dex-id-mapping) table above.
 
 **If the pool is not indexed** (0 results), fall back to asking the user to specify the DEX.
+
+## Error Handling
+
+### HTTP Error Codes
+
+| Code | Meaning | Action |
+|---|---|---|
+| 400 | Bad request | Check query parameters: `chainIds`, `q`, `protocol`. |
+| 404 | Not found | Check endpoint URL and chain ID. |
+| 429 | Rate limited | Wait and retry with exponential backoff. |
+| 500 | Internal server error | Retry after a brief delay. If persistent, the service may be down. |
+
+For any error not listed here, refer to **`${CLAUDE_PLUGIN_ROOT}/skills/error-handling/SKILL.md`**.
 
 ## Important Notes
 

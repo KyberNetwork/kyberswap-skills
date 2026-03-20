@@ -53,11 +53,18 @@ kyberswap-skills/
 │   │       └── execute-zap.sh   # Calls fast-zap.sh then broadcasts
 │   ├── position-manager/ # View and analyze liquidity positions
 │   │   └── SKILL.md
+│   ├── pool-info/     # Query liquidity pool details
+│   │   └── SKILL.md
 │   └── error-handling/ # Error diagnosis and resolution
 │       └── SKILL.md
 ├── references/         # Shared docs
+│   ├── address-validation.md
 │   ├── api-reference.md
-│   └── token-registry.md
+│   ├── approval-guide.md
+│   ├── dex-identifiers.md
+│   ├── supported-chains.md
+│   ├── token-registry.md
+│   └── wrapped-tokens.md
 ├── tests/              # Test suite
 │   ├── test-fast-swap.sh
 │   └── agent-test-cases.md
@@ -169,6 +176,18 @@ View and analyze DeFi liquidity positions across chains. Shows in-range/out-of-r
 ```
 
 Returns: portfolio summary (total value, unclaimed fees, earned fees), position tables with APR, price ranges, current amounts, and actionable suggestions for out-of-range positions.
+
+### pool-info
+
+Query liquidity pool details — TVL, volume, fee tier, APR, and token pair info across KyberSwap DEX pools.
+
+```
+/pool-info 0xc6962004f452be9203591991d15f6b388e09e8d0 on arbitrum
+/pool-info find ETH/USDC pools on arbitrum
+/pool-info best pool for WBTC/ETH on ethereum by TVL
+```
+
+Returns: pool address, DEX identifier, fee tier, token pair, TVL, 24h volume, APR, LP APR, and earned fees. Supports both pool address lookup and token pair search across all indexed DEXes. This skill is **read-only** — no transactions are built or submitted.
 
 ### zap
 
