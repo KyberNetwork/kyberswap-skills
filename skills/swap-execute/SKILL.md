@@ -312,9 +312,71 @@ Common issues:
 - Approval needed: Run token approval first for ERC-20 inputs
 ```
 
+### Step 5b: Execute with ethers.js (Alternative for non-Foundry environments)
+
+If the executing agent does not have Foundry's `cast` installed (e.g., OpenClaw agents, browser-based agents, or Node.js environments), use ethers.js directly with the swap-build output:
+
+```javascript
+const { ethers } = require("ethers");
+
+// Connect to RPC
+const provider = new ethers.JsonRpcProvider(RPC_URL);
+const signer = new ethers.Wallet(privateKey, provider);
+
+// Pre-flight: check balances
+const nativeBalance = await provider.getBalance(sender);
+const gasPrice = await provider.getFeeData();
+const gasCost = BigInt(tx.gas) * gasPrice.gasPrice;
+const totalNeeded = BigInt(tx.value) + gasCost;
+
+if (nativeBalance < totalNeeded) {
+  throw new Error(`Insufficient balance: have ${nativeBalance}, need ${totalNeeded}`);
+}
+
+// For ERC-20 input: check allowance
+if (tokenIn.address !== "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE") {
+  const token = new ethers.Contract(tokenIn.address, [
+    "function allowance(address,address) view returns (uint256)"
+  ], provider);
+  const allowance = await token.allowance(sender, tx.to);
+  if (allowance < BigInt(tokenIn.amountWei)) {
+    throw new Error(`Insufficient approval: ${allowance} < ${tokenIn.amountWei}. Run /swap-approve first.`);
+  }
+}
+
+// Simulate first (recommended)
+try {
+  await provider.call({
+    from: sender,
+    to: tx.to,
+    data: tx.data,
+    value: tx.value,
+    gasLimit: tx.gas
+  });
+} catch (error) {
+  throw new Error(`Simulation failed: ${error.reason || error.message}. Rebuild with fresh route.`);
+}
+
+// Execute
+const txResponse = await signer.sendTransaction({
+  to: tx.to,
+  data: tx.data,
+  value: tx.value,
+  gasLimit: Math.ceil(Number(tx.gas) * 1.2) // 20% buffer
+});
+
+const receipt = await txResponse.wait();
+console.log(`TX Hash: ${receipt.hash}`);
+console.log(`Status: ${receipt.status === 1 ? "Success" : "Reverted"}`);
+console.log(`Gas Used: ${receipt.gasUsed}`);
+console.log(`Block: ${receipt.blockNumber}`);
+```
+
+> **Note:** The ethers.js approach is functionally equivalent to `cast send`. The same security principles apply: never log private keys, always simulate before executing, always verify the router address. For production use, replace `ethers.Wallet` with a proper signer (KMS, HSM, multi-sig, or hardware wallet via ethers.js Signer interface).
+
 ## ERC-20 Approval (if needed)
 
-If the swap input is an ERC-20 token (not native), the user may need to approve first:
+If the swap input is an ERC-20 token (not native), the user may need to approve first. Use the dedicated **`/swap-approve`** skill for a guided approval flow, or use these commands directly:
 
 ```bash
 cast send \

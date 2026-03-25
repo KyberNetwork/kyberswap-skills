@@ -34,3 +34,4 @@ node_modules/
 *.log
 /test-output
 SECURITY_AUDIT_REPORT.md
+/tests
