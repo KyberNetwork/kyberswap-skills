@@ -152,6 +152,35 @@ json_output() {
   fi
 }
 
+# Convert a uint256 value returned by cast into a plain decimal string.
+# Handles both hex and decimal outputs without overflowing bash integers.
+uint256_to_dec() {
+  local raw="${1:-}"
+
+  if [[ -z "$raw" ]]; then
+    return 1
+  fi
+
+  if [[ "$raw" =~ ^0[xX][a-fA-F0-9]+$ ]]; then
+    # cast to-dec requires lowercase 0x prefix
+    cast to-dec "${raw/0X/0x}" 2>/dev/null || return 1
+    return 0
+  fi
+
+  if [[ "$raw" =~ ^[0-9]+$ ]]; then
+    echo "$raw"
+    return 0
+  fi
+
+  raw="${raw%%[^0-9]*}"
+  if [[ -n "$raw" ]]; then
+    echo "$raw"
+    return 0
+  fi
+
+  return 1
+}
+
 usage() {
   cat >&2 <<EOF
 Usage: $0 <amount> <tokenIn> <tokenOut> <chain> <sender> [recipient] [slippage_bps] [wallet_method] [keystore_name]
@@ -465,12 +494,7 @@ main() {
       "balanceOf(address)(uint256)" \
       "$sender" 2>/dev/null || echo "0")
 
-    if [[ "$balance_hex" == 0x* ]]; then
-      balance_dec=$(printf "%d" "$balance_hex" 2>/dev/null || echo "0")
-    else
-      balance_dec="${balance_hex%%[^0-9]*}"
-      balance_dec="${balance_dec:-0}"
-    fi
+    balance_dec=$(uint256_to_dec "$balance_hex" || echo "0")
 
     if [[ "$balance_dec" =~ ^[0-9]+$ ]] && [[ "$amount_in_wei" =~ ^[0-9]+$ ]] && command -v bc &>/dev/null; then
       if (( $(echo "$balance_dec < $amount_in_wei" | bc -l) )); then
@@ -490,12 +514,7 @@ main() {
       "$sender" \
       "$router_address" 2>/dev/null || echo "0")
 
-    if [[ "$allowance_hex" == 0x* ]]; then
-      allowance_dec=$(printf "%d" "$allowance_hex" 2>/dev/null || echo "0")
-    else
-      allowance_dec="${allowance_hex%%[^0-9]*}"
-      allowance_dec="${allowance_dec:-0}"
-    fi
+    allowance_dec=$(uint256_to_dec "$allowance_hex" || echo "0")
 
     log "Current allowance: $allowance_dec"
     log "Required amount: $amount_in_wei"
