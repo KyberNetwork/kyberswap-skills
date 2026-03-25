@@ -622,6 +622,34 @@ main() {
     log "WARNING: No expected chain ID configured for '$chain' — skipping chain ID verification"
   fi
 
+  # ─────────────────────────────────────────────────────────────────────────
+  # Step 4b: Pre-broadcast simulation via cast call
+  # ─────────────────────────────────────────────────────────────────────────
+
+  log "Simulating transaction (cast call)..."
+
+  local sim_output
+  local sim_exit=0
+
+  sim_output=$(cast call \
+    --rpc-url "$rpc_url" \
+    --from "$sender" \
+    --value "$value" \
+    --gas-limit "$gas" \
+    "$to" \
+    "$data" 2>&1) || sim_exit=$?
+
+  if [[ $sim_exit -ne 0 ]]; then
+    # Sanitize simulation error output (same pattern as tx error sanitization)
+    local safe_sim_output
+    safe_sim_output=$(echo "$sim_output" | sed -E \
+      -e 's/0x[a-fA-F0-9]{64}/[REDACTED_HEX]/g')
+    json_output false "Swap failed (pre-flight simulation): Transaction would revert on-chain. No transaction was submitted. Revert output: $safe_sim_output"
+    exit 1
+  fi
+
+  log "Simulation passed"
+
   log "Executing transaction..."
 
   local tx_output
