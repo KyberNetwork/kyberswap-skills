@@ -623,7 +623,7 @@ main() {
   fi
 
   # ─────────────────────────────────────────────────────────────────────────
-  # Step 4b: Pre-broadcast simulation via cast call
+  # Step 5b: Pre-broadcast simulation via cast call
   # ─────────────────────────────────────────────────────────────────────────
 
   log "Simulating transaction (cast call)..."

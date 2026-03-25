@@ -317,7 +317,7 @@ Common issues:
 If the executing agent does not have Foundry's `cast` installed (e.g., OpenClaw agents, browser-based agents, or Node.js environments), use ethers.js directly with the swap-build output:
 
 ```javascript
-import { ethers } from "ethers";
+const { ethers } = require("ethers");
 
 // Connect to RPC
 const provider = new ethers.JsonRpcProvider(RPC_URL);
