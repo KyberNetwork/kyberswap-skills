@@ -98,7 +98,7 @@ Use the appropriate RPC endpoint for the chain:
 
 | Chain | RPC URL |
 |-------|---------|
-| ethereum | `https://rpc.ankr.com/eth` |
+| ethereum | `https://ethereum-rpc.publicnode.com` |
 | arbitrum | `https://arb1.arbitrum.io/rpc` |
 | polygon | `https://polygon-rpc.com` |
 | optimism | `https://mainnet.optimism.io` |
@@ -240,7 +240,7 @@ cast send \
 ```bash
 # Using private key from environment
 cast send \
-  --rpc-url https://rpc.ankr.com/eth \
+  --rpc-url https://ethereum-rpc.publicnode.com \
   --private-key $PRIVATE_KEY \
   --gas-limit 250000 \
   --value 1000000000000000000 \

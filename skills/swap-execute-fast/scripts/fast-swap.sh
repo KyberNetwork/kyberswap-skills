@@ -115,6 +115,15 @@ from_wei() {
   fi
 }
 
+# Return success if the input is a decimal uint string greater than zero.
+# Avoid bash arithmetic here because API values can exceed signed 64-bit range.
+is_positive_uint() {
+  local value="${1:-}"
+
+  [[ "$value" =~ ^[0-9]+$ ]] || return 1
+  [[ "$value" =~ [1-9] ]]
+}
+
 # Get chain ID from slug
 get_chain_id() {
   case "$1" in
@@ -513,7 +522,7 @@ main() {
   fi
 
   amount_out=$(echo "$route_resp" | jq -r '.data.routeSummary.amountOut')
-  [[ "$amount_out" =~ ^[0-9]+$ ]] && (( amount_out > 0 )) || die "Invalid amountOut from API: '$amount_out'. Possible API corruption."
+  is_positive_uint "$amount_out" || die "Invalid amountOut from API: '$amount_out'. Possible API corruption."
   amount_in_usd=$(echo "$route_resp" | jq -r '.data.routeSummary.amountInUsd')
   amount_out_usd=$(echo "$route_resp" | jq -r '.data.routeSummary.amountOutUsd')
   route_gas=$(echo "$route_resp" | jq -r '.data.routeSummary.gas')
@@ -592,7 +601,7 @@ main() {
       die "Unexpected router address from API on retry: $router_address. Expected: $expected_router."
     fi
     amount_out=$(echo "$route_resp" | jq -r '.data.routeSummary.amountOut')
-    [[ "$amount_out" =~ ^[0-9]+$ ]] && (( amount_out > 0 )) || die "Invalid amountOut from API on retry: '$amount_out'."
+    is_positive_uint "$amount_out" || die "Invalid amountOut from API on retry: '$amount_out'."
     amount_in_usd=$(echo "$route_resp" | jq -r '.data.routeSummary.amountInUsd')
     amount_out_usd=$(echo "$route_resp" | jq -r '.data.routeSummary.amountOutUsd')
     route_gas=$(echo "$route_resp" | jq -r '.data.routeSummary.gas')
