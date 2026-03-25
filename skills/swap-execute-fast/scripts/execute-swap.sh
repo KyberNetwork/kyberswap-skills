@@ -162,7 +162,8 @@ uint256_to_dec() {
   fi
 
   if [[ "$raw" =~ ^0[xX][a-fA-F0-9]+$ ]]; then
-    cast to-dec "$raw" 2>/dev/null || return 1
+    # cast to-dec requires lowercase 0x prefix
+    cast to-dec "${raw/0X/0x}" 2>/dev/null || return 1
     return 0
   fi
 

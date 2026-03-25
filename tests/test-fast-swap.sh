@@ -172,6 +172,10 @@ test_is_positive_uint() {
     "abc"
     "12.3"
     "-1"
+    " 1"
+    "1 "
+    "0x1"
+    "00000000000000000000"
   )
 
   local value
