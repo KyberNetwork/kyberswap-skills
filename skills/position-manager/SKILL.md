@@ -99,6 +99,8 @@ URL: https://earn-service.kyberswap.com/api/v1/positions?wallet={wallet}&chainId
 Prompt: Return the full JSON response body exactly as received.
 ```
 
+Add the `X-Client-Id: ai-agent-skills` header.
+
 ### Step 3: Handle Errors
 
 Check the response for errors before proceeding:

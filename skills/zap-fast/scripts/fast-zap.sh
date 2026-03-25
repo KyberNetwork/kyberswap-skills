@@ -80,44 +80,6 @@ to_wei() {
   result="$(echo "$result" | sed 's/^0*//')"
   echo "${result:-0}"
 }
-
-# Convert wei to human-readable amount
-from_wei() {
-  local wei="$1" decimals="$2"
-  local len int_part dec_part
-
-  [[ -z "$wei" || "$wei" == "0" ]] && echo "0" && return
-
-  # Strip leading zeros from input
-  wei="$(echo "$wei" | sed 's/^0*//')"
-  [[ -z "$wei" ]] && echo "0" && return
-
-  len=${#wei}
-
-  if (( decimals == 0 )); then
-    echo "$wei"
-  elif (( len <= decimals )); then
-    local pad=$((decimals - len))
-    if (( pad > 0 )); then
-      dec_part="$(printf '%0*d' "$pad" 0)${wei}"
-    else
-      dec_part="$wei"
-    fi
-    dec_part="$(echo "$dec_part" | sed 's/0*$//')"
-    [[ -z "$dec_part" ]] && echo "0" && return
-    echo "0.${dec_part}"
-  else
-    int_part="${wei:0:$((len - decimals))}"
-    dec_part="${wei:$((len - decimals))}"
-    dec_part="$(echo "$dec_part" | sed 's/0*$//')"
-    if [[ -z "$dec_part" ]]; then
-      echo "$int_part"
-    else
-      echo "${int_part}.${dec_part}"
-    fi
-  fi
-}
-
 # Normalize DEX identifier to the API's DEX_* enum format
 # Accepts shorthand (uniswapv3, pancakev3) or canonical (DEX_UNISWAPV3)
 normalize_dex() {
@@ -369,7 +331,7 @@ main() {
   local slippage_bps=$slippage
   if (( slippage_bps > 500 )); then
     if command -v bc &>/dev/null; then
-      log "WARNING: High slippage of ${slippage_bps} bps ($(echo "scale=1; $slippage_bps / 100" | bc)%). Most zaps use 50-300 bps."
+      log "WARNING: High slippage of ${slippage_bps} bps ($(echo "scale=1; $slippage_bps / 100" | bc 2>/dev/null || echo "?")%). Most zaps use 50-300 bps."
     else
       log "WARNING: High slippage of ${slippage_bps} bps. Most zaps use 50-300 bps."
     fi

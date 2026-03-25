@@ -224,10 +224,10 @@ bash fast-limit-order.sh 100 LINK USDC 15.50 polygon 0xYourAddress 2592000 env
     "isNative": false
   },
   "takerAsset": {
-    "symbol": "ETH",
-    "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+    "symbol": "WETH",
+    "address": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     "decimals": 18,
-    "isNative": true
+    "isNative": false
   },
   "order": {
     "makingAmount": "1000",
@@ -238,7 +238,7 @@ bash fast-limit-order.sh 100 LINK USDC 15.50 polygon 0xYourAddress 2592000 env
     "expiredAt": 1741564800
   },
   "contract": "0xcab2FA2eeab7065B45CBcF6E3936dDE2506b4f6C",
-  "allowanceStatus": "sufficient",  // or "approved" if auto-approved
+  "allowanceStatus": "sufficient",
   "allowance": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
   "walletMethod": "keystore"
 }

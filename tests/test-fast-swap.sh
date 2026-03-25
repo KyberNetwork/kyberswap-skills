@@ -45,6 +45,7 @@ source_functions() {
   trap "rm -f '$tmpfile'" RETURN
   sed -n '/^to_wei()/,/^}/p' "$FAST_SWAP" > "$tmpfile"
   sed -n '/^from_wei()/,/^}/p' "$FAST_SWAP" >> "$tmpfile"
+  sed -n '/^is_positive_uint()/,/^}/p' "$FAST_SWAP" >> "$tmpfile"
   source "$tmpfile"
 }
 
@@ -146,6 +147,51 @@ test_roundtrip() {
       pass "roundtrip($input, $decimals) = $input"
     else
       fail "roundtrip($input, $decimals) to_wei=$wei from_wei=$back"
+    fi
+  done
+}
+
+# ── Unit Tests: is_positive_uint ────────────────────────────────────────────
+
+test_is_positive_uint() {
+  section "is_positive_uint validation"
+
+  source_functions
+
+  local positive_cases=(
+    "1"
+    "42"
+    "103724461543741151205"
+    "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+  )
+
+  local zero_or_invalid_cases=(
+    "0"
+    "0000"
+    ""
+    "abc"
+    "12.3"
+    "-1"
+    " 1"
+    "1 "
+    "0x1"
+    "00000000000000000000"
+  )
+
+  local value
+  for value in "${positive_cases[@]}"; do
+    if is_positive_uint "$value"; then
+      pass "is_positive_uint($value) = true"
+    else
+      fail "is_positive_uint($value) expected=true"
+    fi
+  done
+
+  for value in "${zero_or_invalid_cases[@]}"; do
+    if is_positive_uint "$value"; then
+      fail "is_positive_uint($value) expected=false"
+    else
+      pass "is_positive_uint($value) = false"
     fi
   done
 }
@@ -489,6 +535,7 @@ run_unit_tests() {
   test_to_wei
   test_from_wei
   test_roundtrip
+  test_is_positive_uint
 }
 
 run_live_tests() {

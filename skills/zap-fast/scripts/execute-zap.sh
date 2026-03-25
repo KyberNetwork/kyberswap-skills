@@ -254,6 +254,10 @@ main() {
     json_output false "Zap failed (pre-flight): Invalid slippage '$slippage_bps'. Must be a non-negative integer (basis points). No transaction was submitted."
     exit 1
   fi
+  if (( slippage_bps > 2000 )); then
+    json_output false "Zap failed (pre-flight): Slippage ${slippage_bps} bps exceeds maximum of 2000 bps (20%). No transaction was submitted."
+    exit 1
+  fi
   if [[ -n "$keystore_name" ]] && ! [[ "$keystore_name" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
     json_output false "Zap failed (pre-flight): Invalid keystore name '$keystore_name'. Must contain only letters, digits, underscores, dots, and hyphens. No transaction was submitted."
     exit 1
@@ -353,7 +357,7 @@ main() {
   # Sanitize gas: must be numeric to prevent bc injection
   [[ "$gas" =~ ^[0-9]+$ ]] || gas="500000"
 
-  # Apply 20% buffer to gas limit for safety margin
+  # Apply 50% buffer to gas limit for safety margin
   if [[ "$gas" =~ ^[0-9]+$ ]]; then
     gas_original="$gas"
     gas=$(( gas + gas / 2 ))
@@ -416,7 +420,7 @@ main() {
   log "Checking gas price and native balance..."
 
   local gas_price_wei
-  gas_price_wei=$(cast gas-price --rpc-url "$rpc_url" 2>/dev/null || echo "0")
+  gas_price_wei=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast gas-price --rpc-url "$rpc_url" 2>/dev/null || echo "0")
   gas_price_wei="${gas_price_wei%%[^0-9]*}"
   gas_price_wei="${gas_price_wei:-0}"
 
@@ -426,7 +430,7 @@ main() {
     fallback_rpc=$(get_fallback_rpc_url "$chain")
     if [[ -n "$fallback_rpc" && "$fallback_rpc" != "$rpc_url" ]]; then
       log "Primary RPC failed for gas price, trying fallback..."
-      gas_price_wei=$(cast gas-price --rpc-url "$fallback_rpc" 2>/dev/null || echo "0")
+      gas_price_wei=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast gas-price --rpc-url "$fallback_rpc" 2>/dev/null || echo "0")
       gas_price_wei="${gas_price_wei%%[^0-9]*}"
       gas_price_wei="${gas_price_wei:-0}"
       # Switch to fallback for remaining calls if it works
@@ -447,7 +451,7 @@ main() {
     total_native_needed=$(echo "$value + $gas_cost_wei" | bc 2>/dev/null || echo "0")
 
     local native_balance
-    native_balance=$(cast balance --rpc-url "$rpc_url" "$sender" 2>/dev/null || echo "0")
+    native_balance=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast balance --rpc-url "$rpc_url" "$sender" 2>/dev/null || echo "0")
     native_balance="${native_balance%%[^0-9]*}"
     native_balance="${native_balance:-0}"
 
@@ -468,7 +472,7 @@ main() {
     # Check balance FIRST -- no point approving if you don't have the tokens
     log "Checking $token_in_symbol balance..."
     local balance_hex balance_dec
-    balance_hex=$(cast call \
+    balance_hex=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast call \
       --rpc-url "$rpc_url" \
       "$token_in_address" \
       "balanceOf(address)(uint256)" \
@@ -493,7 +497,7 @@ main() {
     # NOTE: Approve the ZapRouter, NOT the Aggregator router
     log "Checking ERC-20 allowance for $token_in_symbol (spender: ZapRouter $router_address)..."
     local allowance_hex allowance_dec
-    allowance_hex=$(cast call \
+    allowance_hex=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast call \
       --rpc-url "$rpc_url" \
       "$token_in_address" \
       "allowance(address,address)(uint256)" \
@@ -598,7 +602,7 @@ main() {
   local expected_chain_id actual_chain_id
   expected_chain_id=$(get_expected_chain_id "$chain")
   if [[ -n "$expected_chain_id" ]]; then
-    actual_chain_id=$(cast chain-id --rpc-url "$rpc_url" 2>/dev/null || echo "")
+    actual_chain_id=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast chain-id --rpc-url "$rpc_url" 2>/dev/null || echo "")
     actual_chain_id="${actual_chain_id%%[^0-9]*}"
     if [[ -z "$actual_chain_id" ]]; then
       json_output false "Zap failed (pre-flight): Could not verify chain ID from RPC $rpc_url. The RPC may be down. No transaction was submitted."
