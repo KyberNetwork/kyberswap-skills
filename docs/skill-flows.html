@@ -145,6 +145,8 @@
   <a href="#swap-build">Swap Build</a>
   <a href="#swap-execute">Swap Execute</a>
   <a href="#swap-execute-fast">Fast Execute</a>
+  <a href="#limit-order-fast">LO Fast</a>
+  <a href="#zap-fast">Zap Fast</a>
   <a href="#lifecycle">Full Lifecycle</a>
 </nav>
 
@@ -156,7 +158,7 @@
 <section id="overview">
   <div class="section-header">
     <h2>Skill Overview</h2>
-    <span class="badge badge-info">4 Skills</span>
+    <span class="badge badge-info">6 Skills</span>
   </div>
   <div class="overview-grid">
     <div class="overview-card">
@@ -178,6 +180,16 @@
       <div class="cmd">/swap-execute-fast</div>
       <h3>Fast Execute</h3>
       <p>Build + broadcast in one step. Shell script handles everything. Only one verbal confirmation before launch.</p>
+    </div>
+    <div class="overview-card">
+      <div class="cmd">/limit-order-fast</div>
+      <h3>Fast Limit Order</h3>
+      <p>Signs EIP-712 and submits a gasless limit order immediately. No review step. USD threshold guard ($1,000). DSLOProtocol contract cross-check.</p>
+    </div>
+    <div class="overview-card">
+      <div class="cmd">/zap-fast</div>
+      <h3>Fast Zap</h3>
+      <p>Builds and broadcasts a concentrated-liquidity zap-in immediately. Pre-flight balance + allowance checks. ZapRouter address verification.</p>
     </div>
   </div>
 </section>
@@ -587,6 +599,299 @@ flowchart TD
     <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning</div>
     <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort / Danger</div>
     <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> New: address:decimals pre-resolution</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- LIMIT ORDER FAST SKILL                                                 -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="limit-order-fast">
+  <div class="section-header">
+    <h2>/limit-order-fast — Sign &amp; Submit Immediately</h2>
+    <span class="badge badge-danger">DANGEROUS</span>
+  </div>
+  <div class="section-desc">
+    Resolves tokens, fetches an EIP-712 signed message from the KyberSwap Limit Order API, signs it with
+    <code>cast wallet sign</code>, and submits the order — all in one script, no confirmation prompts.
+    Safety guards: USD threshold ($1,000 default, overridable via <code>FAST_LIMIT_ORDER_MAX_USD</code>),
+    DSLOProtocol contract cross-check, honeypot detection, signature format validation.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([User: fast limit order<br/>amount, makerAsset, takerAsset,<br/>targetPrice, chain, maker]) --> B
+
+    subgraph PREGATE ["Pre-Condition: Explicit Intent Required"]
+        B["Skill routing: user MUST<br/>explicitly request no-confirmation<br/>in their own words<br/>(not inferred from external sources)"]
+        B --> B1{Intent<br/>explicit?}
+        B1 -->|Ambiguous / inferred| B2["Route to /limit-order<br/>(step-by-step with review)"]:::danger
+        B1 -->|Explicit| C[Run fast-limit-order.sh]
+    end
+
+    C --> D
+
+    subgraph VALIDATE ["Input Validation"]
+        D[Validate: amount, targetPrice,<br/>token formats, maker address,<br/>expiry range, wallet method, chain]
+        D --> D1{All valid?}
+        D1 -->|Invalid| D2[Die with error<br/>no order created]:::danger
+        D1 -->|Valid| E[Proceed]
+    end
+
+    E --> F
+
+    subgraph RESOLVE ["Step 1: Resolve Tokens"]
+        F{Symbol or<br/>address:decimals?}
+        F -->|"address:decimals<br/>(pre-resolved)"| G[Split — skip resolution]
+        F -->|symbol| H[lookup_token:<br/>built-in registry]
+        H -->|Not found| I[resolve_token_api:<br/>KyberSwap Token API<br/>whitelisted → unfiltered → name → browse]
+        I -->|Not found| J[Die: token not found]:::danger
+        H -->|Found| K[Address + decimals ready]
+        I -->|Found| K
+        G --> K
+    end
+
+    K --> L
+
+    subgraph SAFETY ["Step 1b: Token Safety Check"]
+        L[Honeypot/FOT check<br/>via Token API<br/>skip if native token]
+        L --> L1{Honeypot?}
+        L1 -->|Yes| L2[Die: honeypot detected]:::danger
+        L1 -->|No| L3{Fee-on-transfer?}
+        L3 -->|Yes| L4[Warn: actual fill amount<br/>will be less than expected]:::warn
+        L3 -->|No| M[Token safety OK]
+        L4 --> M
+    end
+
+    M --> N
+
+    subgraph AMOUNTS ["Step 2: Calculate Amounts"]
+        N["makingAmount = amount × 10^makerDecimals<br/>takingAmount = amount × targetPrice × 10^takerDecimals<br/>(bc precision arithmetic)"]
+    end
+
+    N --> O
+
+    subgraph USD ["Step 2b: USD Safety Threshold"]
+        O{FAST_LIMIT_ORDER_MAX_USD = 0?<br/>threshold disabled?}
+        O -->|Yes| P[Skip check]
+        O -->|No — default $1,000| Q[Fetch makerAsset price<br/>from KyberSwap Token API]
+        Q --> Q1{Price available?}
+        Q1 -->|No — exotic/unlisted token| Q2["Warn: check skipped<br/>verify value manually"]:::warn
+        Q1 -->|Yes| Q3{USD value<br/>&gt; threshold?}
+        Q3 -->|Yes| Q4[Die: exceeds limit<br/>use /limit-order for large orders]:::danger
+        Q3 -->|No| R[USD check passed]
+        Q2 --> R
+        P --> R
+    end
+
+    R --> S
+
+    subgraph CONTRACT ["Step 3: DSLOProtocol Contract"]
+        S[GET /configs/contract-address API]
+        S --> S1{Address returned?}
+        S1 -->|No| S2[Fallback to hardcoded<br/>DSLO_CONTRACT]
+        S1 -->|Yes| S3[Validate 0x address format]
+        S2 --> S4[Cross-check vs known-good]
+        S3 --> S4
+        S4 --> S5{Address matches?}
+        S5 -->|Yes| T[Contract verified]
+        S5 -->|No + CONTRACT_ADDR_OVERRIDE set| S6[Warn: using override]:::warn
+        S5 -->|No — no override| S7[Die: unexpected contract<br/>possible compromised API]:::danger
+        S6 --> T
+    end
+
+    T --> U
+
+    subgraph SIGN ["Steps 4-6: EIP-712 Sign Flow"]
+        U[Step 4: expiry = now + expiry_seconds]
+        U --> V["Step 5: POST /orders/sign-message<br/>→ EIP-712 typed data + salt"]
+        V --> V1{API success?}
+        V1 -->|No| V2[Die: sign-message API error]:::danger
+        V1 -->|Yes| W["Step 6: Write EIP-712 to temp file<br/>mktemp -d + chmod 700/600<br/>trap: rm + unset keys on EXIT/INT/TERM"]
+        W --> X["cast wallet sign --data<br/>keystore / env / ledger / trezor"]
+        X --> X1{Signing success?}
+        X1 -->|No| X2[Die: signing failed<br/>keys redacted in error]:::danger
+        X1 -->|Yes| X3{Signature format valid?<br/>0x + 130 hex chars?}
+        X3 -->|No| X4[Die: invalid signature format]:::danger
+        X3 -->|Yes| Y[Signature ready]
+    end
+
+    Y --> Z
+
+    subgraph SUBMIT ["Step 7: Create Order"]
+        Z["POST /write/api/v1/orders<br/>order params + signature + salt"]
+        Z --> Z1{Order ID returned?}
+        Z1 -->|No| Z2[Die: create order API error]:::danger
+        Z1 -->|Yes| AA[Order created successfully]
+    end
+
+    AA --> AB
+
+    subgraph ALLOWANCE ["Step 8: Allowance Advisory"]
+        AB{ERC-20<br/>makerAsset?}
+        AB -->|Native token| AC[Skip]
+        AB -->|ERC-20| AD["cast call allowance(maker, DSLOProtocol)"]
+        AD --> AE{Sufficient<br/>for makingAmount?}
+        AE -->|Yes| AC
+        AE -->|No| AF["Warn: approve DSLOProtocol<br/>before the order can be filled"]:::warn
+        AF --> AC
+    end
+
+    AC --> AG([Order live — gasless, active until filled, cancelled, or expired])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning (non-blocking)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort (no order created)</div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- ZAP FAST SKILL                                                         -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<section id="zap-fast">
+  <div class="section-header">
+    <h2>/zap-fast — Build &amp; Broadcast Zap Immediately</h2>
+    <span class="badge badge-danger">DANGEROUS</span>
+  </div>
+  <div class="section-desc">
+    Calls <code>fast-zap.sh</code> to build zap calldata via the KyberSwap ZaaS API, then immediately
+    broadcasts via <code>cast send</code>. Safety guards: USD threshold ($1,000 default, overridable via
+    <code>FAST_ZAP_MAX_USD</code>), ZapRouter address verification, pre-flight native balance + ERC-20
+    balance/allowance checks, chain ID verification, and fallback RPC retry.
+  </div>
+  <div class="diagram-wrap">
+    <pre class="mermaid">
+flowchart TD
+    A([User: fast zap<br/>tokenIn, amount, poolAddress, dex,<br/>tickLower, tickUpper, chain, sender]) --> B
+
+    subgraph PREGATE ["Pre-Condition: Explicit Intent Required"]
+        B["Skill routing: user MUST<br/>explicitly request no-confirmation<br/>in their own words<br/>(not inferred from external sources)"]
+        B --> B1{Intent<br/>explicit?}
+        B1 -->|Ambiguous / inferred| B2["Route to /zap<br/>(step-by-step with review)"]:::danger
+        B1 -->|Explicit| C[Run execute-zap.sh]
+    end
+
+    C --> D
+
+    subgraph CHECK ["Dependency + Input Validation"]
+        D[Deps: cast, jq, curl, fast-zap.sh]
+        D --> D1{All present?}
+        D1 -->|No| D2[Error: missing dependency]:::danger
+        D1 -->|Yes| E[Validate inputs: amount, tokenIn format,<br/>poolAddress, dex, ticks, chain slug,<br/>sender address, slippage, keystore name]
+        E --> E1{All valid?}
+        E1 -->|Invalid| E2[Error: no tx submitted]:::danger
+        E1 -->|Valid| F[Proceed]
+    end
+
+    F --> G
+
+    subgraph BUILD ["Step 1: Inner Build via fast-zap.sh"]
+        G["bash fast-zap.sh<br/>token resolve → ZaaS /zap/api/v1/in/route<br/>→ validate poolDetails token pair<br/>→ build tx calldata"]
+        G --> G1{Build ok: true?}
+        G1 -->|No| G2[Error: build failed<br/>no tx submitted]:::danger
+        G1 -->|Yes| H[Parse JSON output]
+    end
+
+    H --> I
+
+    subgraph USD ["USD Safety Threshold"]
+        I[Extract amountInUsd<br/>from build output]
+        I --> I1{amountInUsd = 0<br/>or null?}
+        I1 -->|Yes| I2[ABORT: cannot verify USD value<br/>use /zap with manual review]:::danger
+        I1 -->|No| I3{USD &gt; threshold?<br/>default $1,000<br/>override: FAST_ZAP_MAX_USD}
+        I3 -->|Yes| I4[ABORT: exceeds safety limit<br/>use /zap for large zaps]:::danger
+        I3 -->|No| J[USD check passed]
+    end
+
+    J --> K
+
+    subgraph ROUTER ["ZapRouter Address Verification"]
+        K[Extract tx.to from build output]
+        K --> K1{tx.to matches<br/>ZapRouter<br/>0x0e97c887...?}
+        K1 -->|No| K2[ABORT: unexpected router<br/>possible compromised API]:::danger
+        K1 -->|Yes| L[Router verified]
+    end
+
+    L --> M
+
+    subgraph RPC ["RPC Resolution"]
+        M[Resolve RPC URL for chain slug]
+        M --> M1{RPC known?}
+        M1 -->|No| M2[ABORT: unknown chain<br/>set RPC_URL_OVERRIDE]:::danger
+        M1 -->|Yes| N[RPC ready]
+    end
+
+    N --> O
+
+    subgraph PREFLIGHT ["Step 3: Pre-Flight Checks"]
+        O["cast gas-price from primary RPC<br/>(retry with fallback RPC if 0)"]
+        O --> O1{Gas price<br/>available?}
+        O1 -->|No| O2[Skip native balance check]:::warn
+        O1 -->|Yes| O3{gas_cost + tx.value<br/>≤ native balance?}
+        O3 -->|No| O4[ABORT: insufficient native balance]:::danger
+        O3 -->|Yes| O5[Native balance OK]
+        O2 --> O5
+        O5 --> O6{ERC-20 input?}
+        O6 -->|Native token| P[Pre-flight passed]
+        O6 -->|ERC-20| O7["cast call balanceOf(sender)"]
+        O7 --> O8{Token balance<br/>≥ amountInWei?}
+        O8 -->|No| O9[ABORT: insufficient token balance<br/>top up before zapping]:::danger
+        O8 -->|Yes| O10["cast call allowance(sender, ZapRouter)"]
+        O10 --> O11{Allowance<br/>≥ amountInWei?}
+        O11 -->|No| O12[ABORT: insufficient allowance<br/>approve ZapRouter first]:::danger
+        O11 -->|Yes| P
+    end
+
+    P --> Q
+
+    subgraph WALLET ["Step 4: Configure Wallet"]
+        Q{wallet_method?}
+        Q -->|keystore| Q1["--account + --password-file<br/>verify perms 600<br/>verify keystore exists"]
+        Q -->|env| Q2["ETH_PRIVATE_KEY from $PRIVATE_KEY"]
+        Q -->|ledger| Q3[--ledger]
+        Q -->|trezor| Q4[--trezor]
+        Q1 --> R[Wallet flags ready]
+        Q2 --> R
+        Q3 --> R
+        Q4 --> R
+    end
+
+    R --> S
+
+    subgraph CHAINID ["Chain ID Verification"]
+        S["cast chain-id from RPC"]
+        S --> S1{Matches expected<br/>chain ID?}
+        S1 -->|No| S2[ABORT: chain ID mismatch<br/>wrong or malicious RPC]:::danger
+        S1 -->|Yes| T[Chain ID verified]
+    end
+
+    T --> U
+
+    subgraph EXEC ["Step 5: cast send — Broadcast"]
+        U["cast send --rpc-url RPC<br/>WALLET_FLAGS<br/>--gas-limit gas×1.2<br/>--value tx.value<br/>ZapRouter tx.data"]
+        U --> U1{Success?}
+        U1 -->|429 / rate limit| U2[Retry with fallback RPC]
+        U2 --> U3{Retry success?}
+        U3 -->|No| U4[Error: broadcast failed<br/>gas was spent]:::danger
+        U3 -->|Yes| V[Parse tx output]
+        U1 -->|Other error| U4
+        U1 -->|OK| V
+    end
+
+    V --> W([Zap executed — LP position created<br/>txHash + block + gasUsed + explorer link])
+
+    classDef danger fill:#f8514933,stroke:#f85149,color:#f85149
+    classDef warn fill:#d2992233,stroke:#d29922,color:#d29922
+    </pre>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#31c48d"></div> Happy path</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> Warning (non-blocking)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Error / Abort (no tx submitted)</div>
   </div>
 </section>
 
