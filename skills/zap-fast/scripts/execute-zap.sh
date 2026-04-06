@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 #
-# execute-swap.sh - Build and execute a KyberSwap swap in one step
+# execute-zap.sh - Build and execute a KyberSwap zap-in transaction in one step
 #
-# WARNING: This script must be executed, not sourced. Do NOT run: source execute-swap.sh
+# WARNING: This script must be executed, not sourced. Do NOT run: source execute-zap.sh
 #          Sourcing would leak ETH_PRIVATE_KEY into the parent shell environment.
 #
 # Usage:
-#   ./execute-swap.sh <amount> <tokenIn> <tokenOut> <chain> <sender> [recipient] [slippage_bps] [wallet_method] [keystore_name]
+#   ./execute-zap.sh <tokenIn> <amountIn> <poolAddress> <dex> <tickLower> <tickUpper> <chain> <sender> [slippage_bps] [wallet_method] [keystore_name]
 #
 # Arguments:
-#   amount         Human-readable amount (e.g. 1, 0.5, 100)
-#   tokenIn        Input token symbol (e.g. ETH, USDC)
-#   tokenOut       Output token symbol (e.g. USDC, ETH)
+#   tokenIn        Input token symbol (e.g. ETH, USDC) or address:decimals
+#   amountIn       Human-readable amount (e.g. 1, 0.5, 100)
+#   poolAddress    Pool contract address (0x...)
+#   dex            DEX identifier (e.g. uniswapv3, pancakev3)
+#   tickLower      Lower tick of the position
+#   tickUpper      Upper tick of the position
 #   chain          Chain slug (e.g. ethereum, arbitrum, base)
 #   sender         Sender wallet address
-#   recipient      Recipient address (default: same as sender)
-#   slippage_bps   Slippage in basis points (default: 50)
+#   slippage_bps   Slippage in basis points (default: 100)
 #   wallet_method  keystore | env | ledger | trezor (default: keystore)
 #   keystore_name  Keystore account name (default: mykey)
 #
@@ -23,10 +25,10 @@
 #   PRIVATE_KEY             Required if wallet_method=env
 #   KEYSTORE_PASSWORD_FILE  Override default ~/.foundry/.password
 #   RPC_URL_OVERRIDE        Override chain RPC URL
-#   FAST_SWAP_MAX_USD       Override $1000 USD threshold (default: 1000)
+#   FAST_ZAP_MAX_USD        Override $1000 USD threshold (default: 1000)
 #
 # Example:
-#   ./execute-swap.sh 1 USDC ETH base 0xYourAddress "" 50 keystore mykey
+#   ./execute-zap.sh ETH 1 0xPoolAddr uniswapv3 -887220 887220 arbitrum 0xYourAddress 100 keystore mykey
 #
 set -euo pipefail
 
@@ -38,8 +40,9 @@ trap 'unset ETH_PRIVATE_KEY PRIVATE_KEY 2>/dev/null' EXIT INT TERM
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-FAST_SWAP_SCRIPT="${SCRIPT_DIR}/fast-swap.sh"
+FAST_ZAP_SCRIPT="${SCRIPT_DIR}/fast-zap.sh"
 PASSWORD_FILE="${KEYSTORE_PASSWORD_FILE:-$HOME/.foundry/.password}"
+ZAP_ROUTER="0x0e97c887b61ccd952a53578b04763e7134429e05"
 
 # Get RPC URL for chain
 get_rpc_url() {
@@ -53,17 +56,11 @@ get_rpc_url() {
     bsc)        echo "https://bsc-dataseed.binance.org" ;;
     avalanche)  echo "https://api.avax.network/ext/bc/C/rpc" ;;
     linea)      echo "https://rpc.linea.build" ;;
-    mantle)     echo "https://rpc.mantle.xyz" ;;
     sonic)      echo "https://rpc.soniclabs.com" ;;
     berachain)  echo "https://rpc.berachain.com" ;;
     ronin)      echo "https://api.roninchain.com/rpc" ;;
-    unichain)   echo "https://rpc.unichain.org" ;;
-    hyperevm)   echo "https://rpc.hyperliquid.xyz/evm" ;;
-    plasma)     echo "https://plasma.drpc.org" ;;
-    etherlink)  echo "https://node.mainnet.etherlink.com" ;;
-    monad)      echo "https://rpc.monad.xyz" ;;
-    # MegaETH: state=new in KyberSwap API, RPC not confirmed as of 2026-02-19
-    megaeth)    echo "https://rpc.megaeth.com" ;;
+    scroll)     echo "https://rpc.scroll.io" ;;
+    zksync)     echo "https://mainnet.era.zksync.io" ;;
     *)          echo "" ;;
   esac
 }
@@ -95,21 +92,16 @@ get_explorer_url() {
     bsc)        echo "https://bscscan.com" ;;
     avalanche)  echo "https://snowtrace.io" ;;
     linea)      echo "https://lineascan.build" ;;
-    mantle)     echo "https://mantlescan.xyz" ;;
     sonic)      echo "https://sonicscan.io" ;;
     berachain)  echo "https://berascan.com" ;;
     ronin)      echo "https://app.roninchain.com" ;;
-    unichain)   echo "https://uniscan.xyz" ;;
-    hyperevm)   echo "https://explorer.hyperliquid.xyz" ;;
-    plasma)     echo "https://plasmascan.io" ;;
-    etherlink)  echo "https://explorer.etherlink.com" ;;
-    monad)      echo "https://explorer.monad.xyz" ;;
-    megaeth)    echo "https://explorer.megaeth.com" ;;
+    scroll)     echo "https://scrollscan.com" ;;
+    zksync)     echo "https://era.zksync.network" ;;
     *)          echo "https://etherscan.io" ;;
   esac
 }
 
-# Get expected chain ID for chain slug (AC-3: chain ID verification)
+# Get expected chain ID for chain slug (chain ID verification)
 get_expected_chain_id() {
   local chain="$1"
   case "$chain" in
@@ -121,16 +113,11 @@ get_expected_chain_id() {
     bsc)        echo "56" ;;
     avalanche)  echo "43114" ;;
     linea)      echo "59144" ;;
-    mantle)     echo "5000" ;;
     sonic)      echo "146" ;;
     berachain)  echo "80094" ;;
     ronin)      echo "2020" ;;
-    unichain)   echo "130" ;;
-    hyperevm)   echo "999" ;;
-    plasma)     echo "9745" ;;
-    etherlink)  echo "42793" ;;
-    monad)      echo "143" ;;
-    megaeth)    echo "4326" ;;
+    scroll)     echo "534352" ;;
+    zksync)     echo "324" ;;
     *)          echo "" ;;
   esac
 }
@@ -139,8 +126,8 @@ get_expected_chain_id() {
 # Helpers
 # -----------------------------------------------------------------------------
 
-log() { echo "[execute-swap] $*" >&2; }
-error() { echo "[execute-swap] ERROR: $*" >&2; }
+log() { echo "[execute-zap] $*" >&2; }
+error() { echo "[execute-zap] ERROR: $*" >&2; }
 
 json_output() {
   local ok="$1"
@@ -152,55 +139,28 @@ json_output() {
   fi
 }
 
-# Convert a uint256 value returned by cast into a plain decimal string.
-# Handles both hex and decimal outputs without overflowing bash integers.
-uint256_to_dec() {
-  local raw="${1:-}"
-
-  if [[ -z "$raw" ]]; then
-    return 1
-  fi
-
-  if [[ "$raw" =~ ^0[xX][a-fA-F0-9]+$ ]]; then
-    # cast to-dec requires lowercase 0x prefix
-    cast to-dec "${raw/0X/0x}" 2>/dev/null || return 1
-    return 0
-  fi
-
-  if [[ "$raw" =~ ^[0-9]+$ ]]; then
-    echo "$raw"
-    return 0
-  fi
-
-  raw="${raw%%[^0-9]*}"
-  if [[ -n "$raw" ]]; then
-    echo "$raw"
-    return 0
-  fi
-
-  return 1
-}
-
 usage() {
   cat >&2 <<EOF
-Usage: $0 <amount> <tokenIn> <tokenOut> <chain> <sender> [recipient] [slippage_bps] [wallet_method] [keystore_name]
+Usage: $0 <tokenIn> <amountIn> <poolAddress> <dex> <tickLower> <tickUpper> <chain> <sender> [slippage_bps] [wallet_method] [keystore_name]
 
 Arguments:
-  amount         Human-readable amount (e.g. 1, 0.5, 100)
-  tokenIn        Input token symbol (e.g. ETH, USDC)
-  tokenOut       Output token symbol (e.g. USDC, ETH)
+  tokenIn        Input token symbol (e.g. ETH, USDC) or address:decimals
+  amountIn       Human-readable amount (e.g. 1, 0.5, 100)
+  poolAddress    Pool contract address (0x...)
+  dex            DEX identifier (e.g. uniswapv3, pancakev3)
+  tickLower      Lower tick of the position
+  tickUpper      Upper tick of the position
   chain          Chain slug (e.g. ethereum, arbitrum, base)
   sender         Sender wallet address
-  recipient      Recipient address (default: same as sender)
-  slippage_bps   Slippage in basis points (default: 50)
+  slippage_bps   Slippage in basis points (default: 100)
   wallet_method  keystore | env | ledger | trezor (default: keystore)
   keystore_name  Keystore account name (default: mykey)
 
 Examples:
-  $0 1 ETH USDC ethereum 0xYourAddress
-  $0 100 USDC ETH arbitrum 0xYourAddress "" 50 keystore mykey
-  $0 0.5 WBTC DAI polygon 0xSender 0xRecipient 100 env
-  $0 1 ETH USDC base 0xYourAddress "" 50 ledger
+  $0 ETH 1 0xPoolAddr uniswapv3 -887220 887220 arbitrum 0xYourAddress
+  $0 USDC 100 0xPoolAddr pancakev3 -100 100 base 0xYourAddress 50 keystore mykey
+  $0 ETH 0.5 0xPoolAddr uniswapv3 -1000 1000 polygon 0xSender 100 env
+  $0 ETH 1 0xPoolAddr uniswapv3 -887220 887220 base 0xYourAddress 100 ledger
 EOF
   exit 1
 }
@@ -211,19 +171,19 @@ EOF
 
 check_dependencies() {
   if ! command -v cast &>/dev/null; then
-    json_output false "Swap failed (pre-flight): cast not found. Install Foundry: curl -L https://foundry.paradigm.xyz | bash && foundryup. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): cast not found. Install Foundry: download a verified release from github.com/foundry-rs/foundry/releases and verify the checksum before running. No transaction was submitted."
     exit 1
   fi
   if ! command -v jq &>/dev/null; then
-    json_output false "Swap failed (pre-flight): jq not found. Install: brew install jq (mac) or apt install jq (linux). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): jq not found. Install: brew install jq (mac) or apt install jq (linux). No transaction was submitted."
     exit 1
   fi
   if ! command -v curl &>/dev/null; then
-    json_output false "Swap failed (pre-flight): curl not found. Install: brew install curl (mac) or apt install curl (linux). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): curl not found. Install: brew install curl (mac) or apt install curl (linux). No transaction was submitted."
     exit 1
   fi
-  if [[ ! -f "$FAST_SWAP_SCRIPT" ]]; then
-    json_output false "Swap failed (pre-flight): fast-swap.sh not found at: $FAST_SWAP_SCRIPT. No transaction was submitted."
+  if [[ ! -f "$FAST_ZAP_SCRIPT" ]]; then
+    json_output false "Zap failed (pre-flight): fast-zap.sh not found at: $FAST_ZAP_SCRIPT. No transaction was submitted."
     exit 1
   fi
 }
@@ -236,86 +196,90 @@ main() {
   check_dependencies
 
   # Parse arguments
-  local amount="${1:-}"
-  local token_in="${2:-}"
-  local token_out="${3:-}"
-  local chain="${4:-}"
-  local sender="${5:-}"
-  local recipient="${6:-$sender}"
-  local slippage_bps="${7:-50}"
-  local wallet_method="${8:-keystore}"
-  local keystore_name="${9:-mykey}"
+  local token_in="${1:-}"
+  local amount="${2:-}"
+  local pool_address="${3:-}"
+  local dex="${4:-}"
+  local tick_lower="${5:-}"
+  local tick_upper="${6:-}"
+  local chain="${7:-}"
+  local sender="${8:-}"
+  local slippage_bps="${9:-100}"
+  local wallet_method="${10:-keystore}"
+  local keystore_name="${11:-mykey}"
 
   # Validate required arguments
-  if [[ -z "$amount" || -z "$token_in" || -z "$token_out" || -z "$chain" || -z "$sender" ]]; then
+  if [[ -z "$token_in" || -z "$amount" || -z "$pool_address" || -z "$dex" || -z "$tick_lower" || -z "$tick_upper" || -z "$chain" || -z "$sender" ]]; then
     usage
   fi
 
-  # M-9: Input format validation to prevent injection attacks
+  # Input format validation to prevent injection attacks
   if ! [[ "$amount" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid amount format '$amount'. Must be a positive number (e.g. 1, 0.5, 100). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid amount format '$amount'. Must be a positive number (e.g. 1, 0.5, 100). No transaction was submitted."
     exit 1
   fi
   if ! [[ "$token_in" =~ ^[a-zA-Z0-9.]+$ ]] && ! [[ "$token_in" =~ ^0x[a-fA-F0-9]{40}:[0-9]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid tokenIn '$token_in'. Must be a symbol (e.g. ETH) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid tokenIn '$token_in'. Must be a symbol (e.g. ETH) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
     exit 1
   fi
-  if ! [[ "$token_out" =~ ^[a-zA-Z0-9.]+$ ]] && ! [[ "$token_out" =~ ^0x[a-fA-F0-9]{40}:[0-9]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid tokenOut '$token_out'. Must be a symbol (e.g. USDC) or address:decimals (e.g. 0xA0b8...:6). No transaction was submitted."
+  if ! [[ "$pool_address" =~ ^0x[a-fA-F0-9]{40}$ ]] && ! [[ "$pool_address" =~ ^0x[a-fA-F0-9]{64}$ ]]; then
+    json_output false "Zap failed (pre-flight): Invalid pool address/ID '$pool_address'. Must be 0x + 40 hex chars (address) or 0x + 64 hex chars (V4 pool ID). No transaction was submitted."
+    exit 1
+  fi
+  if ! [[ "$dex" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+    json_output false "Zap failed (pre-flight): Invalid dex identifier '$dex'. Must contain only alphanumeric characters, hyphens, and underscores. No transaction was submitted."
+    exit 1
+  fi
+  if ! [[ "$tick_lower" =~ ^-?[0-9]+$ ]]; then
+    json_output false "Zap failed (pre-flight): Invalid tickLower '$tick_lower'. Must be an integer. No transaction was submitted."
+    exit 1
+  fi
+  if ! [[ "$tick_upper" =~ ^-?[0-9]+$ ]]; then
+    json_output false "Zap failed (pre-flight): Invalid tickUpper '$tick_upper'. Must be an integer. No transaction was submitted."
     exit 1
   fi
   if ! [[ "$chain" =~ ^[a-z0-9-]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid chain slug '$chain'. Must contain only lowercase letters, digits, and hyphens. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid chain slug '$chain'. Must contain only lowercase letters, digits, and hyphens. No transaction was submitted."
     exit 1
   fi
 
-  # H-4: Validate sender/recipient address format
+  # Validate sender address format
   if ! [[ "$sender" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid sender address '$sender'. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
-    exit 1
-  fi
-  if [[ -n "$recipient" ]] && ! [[ "$recipient" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid recipient address '$recipient'. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid sender address '$sender'. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
     exit 1
   fi
 
-  # H-5: Validate slippage_bps and keystore_name
+  # Validate slippage_bps and keystore_name
   if [[ -n "$slippage_bps" ]] && ! [[ "$slippage_bps" =~ ^[0-9]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid slippage '$slippage_bps'. Must be a non-negative integer (basis points). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid slippage '$slippage_bps'. Must be a non-negative integer (basis points). No transaction was submitted."
     exit 1
   fi
   if (( slippage_bps > 2000 )); then
-    json_output false "Swap failed (pre-flight): Slippage ${slippage_bps} bps exceeds maximum of 2000 bps (20%). No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Slippage ${slippage_bps} bps exceeds maximum of 2000 bps (20%). No transaction was submitted."
     exit 1
   fi
   if [[ -n "$keystore_name" ]] && ! [[ "$keystore_name" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
-    json_output false "Swap failed (pre-flight): Invalid keystore name '$keystore_name'. Must contain only letters, digits, underscores, dots, and hyphens. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid keystore name '$keystore_name'. Must contain only letters, digits, underscores, dots, and hyphens. No transaction was submitted."
     exit 1
   fi
 
-  # Default recipient to sender if empty
-  if [[ -z "$recipient" ]]; then
-    recipient="$sender"
-  fi
-
-  log "Building swap: $amount $token_in → $token_out on $chain"
+  log "Building zap: $amount $token_in into pool $pool_address ($dex) on $chain"
   log "Sender: $sender"
-  log "Recipient: $recipient"
+  log "Ticks: [$tick_lower, $tick_upper]"
   log "Slippage: ${slippage_bps} bps"
 
-  # ─────────────────────────────────────────────────────────────────────────
-  # Step 1: Build the swap using fast-swap.sh
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
+  # Step 1: Build the zap using fast-zap.sh
+  # ---------------------------------------------------------------------------
 
-  log "Calling fast-swap.sh to build transaction..."
+  log "Calling fast-zap.sh to build transaction..."
 
   local build_output
-  local build_stderr
   local build_exit_code=0
 
   # Capture stdout (JSON) separately from stderr (debug messages)
   # stderr flows through to user, stdout is captured for parsing
-  build_output=$(bash "$FAST_SWAP_SCRIPT" "$amount" "$token_in" "$token_out" "$chain" "$sender" "$recipient" "$slippage_bps") || build_exit_code=$?
+  build_output=$(bash "$FAST_ZAP_SCRIPT" "$token_in" "$amount" "$pool_address" "$dex" "$tick_lower" "$tick_upper" "$chain" "$sender" "$slippage_bps") || build_exit_code=$?
 
   # Validate JSON is parseable
   if ! echo "$build_output" | jq -e . >/dev/null 2>&1; then
@@ -325,7 +289,7 @@ main() {
     if [[ -n "$extracted_json" ]] && echo "$extracted_json" | jq -e . >/dev/null 2>&1; then
       build_output="$extracted_json"
     else
-      json_output false "Swap failed (pre-flight): Invalid JSON output from fast-swap.sh. No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Invalid JSON output from fast-zap.sh. No transaction was submitted."
       exit 1
     fi
   fi
@@ -337,32 +301,36 @@ main() {
   if [[ "$build_ok" != "true" ]]; then
     local build_error
     build_error=$(echo "$build_output" | jq -r '.error // empty' 2>/dev/null || echo "$build_output")
-    json_output false "Swap failed (pre-flight): Build failed — $build_error. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Build failed -- $build_error. No transaction was submitted."
     exit 1
   fi
 
-  log "Swap built successfully"
+  log "Zap built successfully"
 
-  # H-2: Enforce USD threshold for fast swap safety
-  local max_usd="${FAST_SWAP_MAX_USD:-1000}"
+  # Enforce USD threshold for fast zap safety
+  local max_usd="${FAST_ZAP_MAX_USD:-1000}"
   if ! [[ "$max_usd" =~ ^[0-9]+$ ]]; then max_usd=1000; fi
   local amount_in_usd
-  amount_in_usd=$(echo "$build_output" | jq -r '.quote.amountInUsd // .amountInUsd // "0"' 2>/dev/null || echo "0")
+  amount_in_usd=$(echo "$build_output" | jq -r '.zap.amountInUsd // "0"' 2>/dev/null || echo "0")
   # Sanitize: must be a valid number (integer or decimal)
   if ! [[ "$amount_in_usd" =~ ^[0-9]*\.?[0-9]+$ ]]; then
     amount_in_usd="0"
   fi
-  if command -v bc &>/dev/null && [[ "$amount_in_usd" != "0" ]]; then
+  if [[ "$amount_in_usd" == "0" ]]; then
+    json_output false "Zap failed (pre-flight): Could not verify USD value of zap (API returned null/zero for amountInUsd). Fast execution aborted for safety — use /zap with manual review instead. No transaction was submitted."
+    exit 1
+  fi
+  if command -v bc &>/dev/null; then
     if (( $(echo "$amount_in_usd > $max_usd" | bc -l 2>/dev/null || echo 0) )); then
-      json_output false "Swap failed (pre-flight): Swap value \$${amount_in_usd} USD exceeds fast-swap safety threshold of \$${max_usd} USD. For large swaps, use /swap-build + /swap-execute for manual review. No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Zap value \$${amount_in_usd} USD exceeds fast-zap safety threshold of \$${max_usd} USD. For large zaps, use /zap with manual review. No transaction was submitted."
       exit 1
     fi
     log "USD value check: \$${amount_in_usd} within \$${max_usd} threshold"
   fi
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
   # Step 2: Extract transaction data
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
 
   local to data value gas gas_original
   to=$(echo "$build_output" | jq -r '.tx.to // empty')
@@ -370,55 +338,67 @@ main() {
   value=$(echo "$build_output" | jq -r '.tx.value // "0"')
   gas=$(echo "$build_output" | jq -r '.tx.gas // "500000"')
 
-  # Sanitize value and gas: must be numeric to prevent bc injection
+  # Sanitize value: must be numeric to prevent bc injection
   [[ "$value" =~ ^[0-9]+$ ]] || value="0"
+
+  # For native token zaps, if the build API returned value=0 or null,
+  # fall back to amountInWei — the router needs the native token sent as msg.value
+  local token_in_is_native_check
+  token_in_is_native_check=$(echo "$build_output" | jq -r '.tokenIn.isNative // false')
+  if [[ "$token_in_is_native_check" == "true" && "$value" == "0" ]]; then
+    local fallback_value
+    fallback_value=$(echo "$build_output" | jq -r '.zap.amountInWei // empty')
+    if [[ "$fallback_value" =~ ^[0-9]+$ && "$fallback_value" != "0" ]]; then
+      log "Build API returned value=0 for native token zap, using amountInWei=$fallback_value"
+      value="$fallback_value"
+    fi
+  fi
 
   # Sanitize gas: must be numeric to prevent bc injection
   [[ "$gas" =~ ^[0-9]+$ ]] || gas="500000"
 
-  # Apply 20% buffer to gas limit for safety margin
+  # Apply 50% buffer to gas limit for safety margin
   if [[ "$gas" =~ ^[0-9]+$ ]]; then
     gas_original="$gas"
-    gas=$(( gas + gas / 5 ))
-    log "Gas limit: ${gas_original} → ${gas} (+20% buffer)"
+    gas=$(( gas + gas / 2 ))
+    log "Gas limit: ${gas_original} -> ${gas} (+50% buffer)"
   fi
 
   if [[ -z "$to" || -z "$data" ]]; then
-    json_output false "Swap failed (pre-flight): Invalid build output — missing tx.to or tx.data. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Invalid build output -- missing tx.to or tx.data. No transaction was submitted."
     exit 1
   fi
 
-  # Verify router address matches expected KyberSwap router
-  # Override with EXPECTED_ROUTER_OVERRIDE env var if KyberSwap deploys a new router version
-  local expected_router="${EXPECTED_ROUTER_OVERRIDE:-0x6131B5fae19EA4f9D964eAc0408E4408b66337b5}"
-  if [[ -n "${EXPECTED_ROUTER_OVERRIDE:-}" ]]; then
+  # Verify router address matches expected ZapRouter
+  local expected_router="${EXPECTED_ZAP_ROUTER_OVERRIDE:-$ZAP_ROUTER}"
+  if [[ -n "${EXPECTED_ZAP_ROUTER_OVERRIDE:-}" ]]; then
     if ! [[ "$expected_router" =~ ^0x[a-fA-F0-9]{40}$ ]]; then
-      json_output false "Swap failed (pre-flight): Invalid EXPECTED_ROUTER_OVERRIDE format. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Invalid EXPECTED_ZAP_ROUTER_OVERRIDE format. Must be a valid Ethereum address (0x + 40 hex chars). No transaction was submitted."
       exit 1
     fi
-    log "WARNING: Using custom router override: $expected_router"
+    log "WARNING: Using custom ZapRouter override: $expected_router"
   fi
   local to_lower
   to_lower=$(echo "$to" | tr '[:upper:]' '[:lower:]')
   local expected_lower
   expected_lower=$(echo "$expected_router" | tr '[:upper:]' '[:lower:]')
   if [[ "$to_lower" != "$expected_lower" ]]; then
-    json_output false "Swap failed (pre-flight): Unexpected router address '$to'. Expected KyberSwap router: $expected_router. This could indicate a compromised API response. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Unexpected router address '$to'. Expected ZapRouter: $expected_router. This could indicate a compromised API response. No transaction was submitted."
     exit 1
   fi
 
-  # Get quote info for output
-  local amount_in amount_out token_in_symbol token_out_symbol
-  amount_in=$(echo "$build_output" | jq -r '.quote.amountIn // "?"')
-  amount_out=$(echo "$build_output" | jq -r '.tx.amountOut // .quote.amountOut // "?"')
+  # Get zap info for output
+  local amount_in token_in_symbol zap_pool_address zap_dex
+  amount_in=$(echo "$build_output" | jq -r '.zap.amountIn // "?"')
   token_in_symbol=$(echo "$build_output" | jq -r '.tokenIn.symbol // "?"')
-  token_out_symbol=$(echo "$build_output" | jq -r '.tokenOut.symbol // "?"')
+  zap_pool_address=$(echo "$build_output" | jq -r '.zap.poolAddress // "?"')
+  zap_dex=$(echo "$build_output" | jq -r '.zap.dex // "?"')
 
   # Get token info for approval check
   local token_in_address token_in_is_native amount_in_wei router_address
   token_in_address=$(echo "$build_output" | jq -r '.tokenIn.address // empty')
   token_in_is_native=$(echo "$build_output" | jq -r '.tokenIn.isNative // false')
-  amount_in_wei=$(echo "$build_output" | jq -r '.quote.amountInWei // empty')
+  amount_in_wei=$(echo "$build_output" | jq -r '.zap.amountInWei // empty')
   # Sanitize amount_in_wei: must be numeric for bc comparisons
   [[ "$amount_in_wei" =~ ^[0-9]+$ ]] || amount_in_wei=""
   router_address="$to"
@@ -426,21 +406,21 @@ main() {
   # Resolve RPC URL (needed for all on-chain pre-flight checks)
   local rpc_url="${RPC_URL_OVERRIDE:-$(get_rpc_url "$chain")}"
   if [[ -z "$rpc_url" ]]; then
-    json_output false "Swap failed (pre-flight): Unknown chain '$chain'. Set RPC_URL_OVERRIDE env var. No transaction was submitted."
+    json_output false "Zap failed (pre-flight): Unknown chain '$chain'. Set RPC_URL_OVERRIDE env var. No transaction was submitted."
     exit 1
   fi
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
   # Step 3: Pre-flight balance checks
-  #   Order matters: native balance → token balance → allowance
+  #   Order matters: native balance -> token balance -> allowance
   #   No point approving if you don't have the tokens or gas.
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
 
   # 3a) Native balance: covers gas + tx.value
   log "Checking gas price and native balance..."
 
   local gas_price_wei
-  gas_price_wei=$(cast gas-price --rpc-url "$rpc_url" 2>/dev/null || echo "0")
+  gas_price_wei=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast gas-price --rpc-url "$rpc_url" 2>/dev/null || echo "0")
   gas_price_wei="${gas_price_wei%%[^0-9]*}"
   gas_price_wei="${gas_price_wei:-0}"
 
@@ -450,7 +430,7 @@ main() {
     fallback_rpc=$(get_fallback_rpc_url "$chain")
     if [[ -n "$fallback_rpc" && "$fallback_rpc" != "$rpc_url" ]]; then
       log "Primary RPC failed for gas price, trying fallback..."
-      gas_price_wei=$(cast gas-price --rpc-url "$fallback_rpc" 2>/dev/null || echo "0")
+      gas_price_wei=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast gas-price --rpc-url "$fallback_rpc" 2>/dev/null || echo "0")
       gas_price_wei="${gas_price_wei%%[^0-9]*}"
       gas_price_wei="${gas_price_wei:-0}"
       # Switch to fallback for remaining calls if it works
@@ -471,67 +451,78 @@ main() {
     total_native_needed=$(echo "$value + $gas_cost_wei" | bc 2>/dev/null || echo "0")
 
     local native_balance
-    native_balance=$(cast balance --rpc-url "$rpc_url" "$sender" 2>/dev/null || echo "0")
+    native_balance=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast balance --rpc-url "$rpc_url" "$sender" 2>/dev/null || echo "0")
     native_balance="${native_balance%%[^0-9]*}"
     native_balance="${native_balance:-0}"
 
     if [[ "$native_balance" =~ ^[0-9]+$ ]] && [[ "$total_native_needed" =~ ^[0-9]+$ ]] && command -v bc &>/dev/null; then
       if (( $(echo "$native_balance < $total_native_needed" | bc -l) )); then
-        json_output false "Swap failed (pre-flight): Insufficient native token balance. Have: ${native_balance} wei, Need: ~${total_native_needed} wei (value: ${value} + gas: ~${gas_cost_wei}). No transaction was submitted."
+        json_output false "Zap failed (pre-flight): Insufficient native token balance. Have: ${native_balance} wei, Need: ~${total_native_needed} wei (value: ${value} + gas: ~${gas_cost_wei}). No transaction was submitted."
         exit 1
       fi
     fi
     log "Native balance OK: ${native_balance} wei (need ~${total_native_needed})"
   else
-    log "Could not fetch gas price — skipping native balance pre-check"
+    log "Could not fetch gas price -- skipping native balance pre-check"
   fi
 
   # 3b) ERC-20 token balance + allowance (only for non-native input)
   if [[ "$token_in_is_native" != "true" && -n "$token_in_address" && -n "$amount_in_wei" ]]; then
 
-    # Check balance FIRST — no point approving if you don't have the tokens
+    # Check balance FIRST -- no point approving if you don't have the tokens
     log "Checking $token_in_symbol balance..."
     local balance_hex balance_dec
-    balance_hex=$(cast call \
+    balance_hex=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast call \
       --rpc-url "$rpc_url" \
       "$token_in_address" \
       "balanceOf(address)(uint256)" \
       "$sender" 2>/dev/null || echo "0")
 
-    balance_dec=$(uint256_to_dec "$balance_hex" || echo "0")
+    if [[ "$balance_hex" == 0x* ]]; then
+      balance_dec=$(printf "%d" "$balance_hex" 2>/dev/null || echo "0")
+    else
+      balance_dec="${balance_hex%%[^0-9]*}"
+      balance_dec="${balance_dec:-0}"
+    fi
 
     if [[ "$balance_dec" =~ ^[0-9]+$ ]] && [[ "$amount_in_wei" =~ ^[0-9]+$ ]] && command -v bc &>/dev/null; then
       if (( $(echo "$balance_dec < $amount_in_wei" | bc -l) )); then
-        json_output false "Swap failed (pre-flight): Insufficient $token_in_symbol balance. Have: $balance_dec wei, Need: $amount_in_wei wei. Top up your $token_in_symbol before swapping. No transaction was submitted."
+        json_output false "Zap failed (pre-flight): Insufficient $token_in_symbol balance. Have: $balance_dec wei, Need: $amount_in_wei wei. Top up your $token_in_symbol before zapping. No transaction was submitted."
         exit 1
       fi
     fi
     log "$token_in_symbol balance OK"
 
     # Check allowance AFTER balance is confirmed
-    log "Checking ERC-20 allowance for $token_in_symbol..."
+    # NOTE: Approve the ZapRouter, NOT the Aggregator router
+    log "Checking ERC-20 allowance for $token_in_symbol (spender: ZapRouter $router_address)..."
     local allowance_hex allowance_dec
-    allowance_hex=$(cast call \
+    allowance_hex=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast call \
       --rpc-url "$rpc_url" \
       "$token_in_address" \
       "allowance(address,address)(uint256)" \
       "$sender" \
       "$router_address" 2>/dev/null || echo "0")
 
-    allowance_dec=$(uint256_to_dec "$allowance_hex" || echo "0")
+    if [[ "$allowance_hex" == 0x* ]]; then
+      allowance_dec=$(printf "%d" "$allowance_hex" 2>/dev/null || echo "0")
+    else
+      allowance_dec="${allowance_hex%%[^0-9]*}"
+      allowance_dec="${allowance_dec:-0}"
+    fi
 
     log "Current allowance: $allowance_dec"
     log "Required amount: $amount_in_wei"
 
     if command -v bc &>/dev/null; then
       if [[ "$allowance_dec" =~ ^[0-9]+$ ]] && [[ "$amount_in_wei" =~ ^[0-9]+$ ]] && (( $(echo "$allowance_dec < $amount_in_wei" | bc -l) )); then
-        json_output false "Swap failed (pre-flight): Insufficient allowance for $token_in_symbol. Current: $allowance_dec, Required: $amount_in_wei. No transaction was submitted. Run: cast send --rpc-url $rpc_url [WALLET_FLAGS] $token_in_address 'approve(address,uint256)' $router_address $amount_in_wei"
+        json_output false "Zap failed (pre-flight): Insufficient allowance for $token_in_symbol to ZapRouter. Current: $allowance_dec, Required: $amount_in_wei. No transaction was submitted. Run: cast send --rpc-url $rpc_url [WALLET_FLAGS] $token_in_address 'approve(address,uint256)' $router_address $amount_in_wei"
         exit 1
       fi
     else
       if [[ ${#allowance_dec} -lt ${#amount_in_wei} ]] || \
          [[ ${#allowance_dec} -eq ${#amount_in_wei} && "$allowance_dec" < "$amount_in_wei" ]]; then
-        json_output false "Swap failed (pre-flight): Insufficient allowance for $token_in_symbol. Current: $allowance_dec, Required: $amount_in_wei. No transaction was submitted. Approve the router first."
+        json_output false "Zap failed (pre-flight): Insufficient allowance for $token_in_symbol to ZapRouter. Current: $allowance_dec, Required: $amount_in_wei. No transaction was submitted. Approve the ZapRouter first."
         exit 1
       fi
     fi
@@ -539,15 +530,15 @@ main() {
     log "Allowance OK"
   fi
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
   # Step 4: Configure wallet
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
 
   local wallet_flags=()
   case "$wallet_method" in
     keystore)
       if [[ ! -f "$PASSWORD_FILE" ]]; then
-        json_output false "Swap failed (pre-flight): Password file not found: $PASSWORD_FILE. Create it or set KEYSTORE_PASSWORD_FILE. No transaction was submitted."
+        json_output false "Zap failed (pre-flight): Password file not found: $PASSWORD_FILE. Create it or set KEYSTORE_PASSWORD_FILE. No transaction was submitted."
         exit 1
       fi
       # Check password file permissions
@@ -558,13 +549,13 @@ main() {
         pw_perms=$(stat -c '%a' "$PASSWORD_FILE" 2>/dev/null || echo "unknown")
       fi
       if [[ "$pw_perms" != "600" && "$pw_perms" != "unknown" ]]; then
-        json_output false "Swap failed (pre-flight): Password file $PASSWORD_FILE has insecure permissions ($pw_perms). Required: 600. Fix with: chmod 600 $PASSWORD_FILE. No transaction was submitted."
+        json_output false "Zap failed (pre-flight): Password file $PASSWORD_FILE has insecure permissions ($pw_perms). Required: 600. Fix with: chmod 600 $PASSWORD_FILE. No transaction was submitted."
         exit 1
       fi
       # Validate keystore exists
       local keystore_dir="${HOME}/.foundry/keystores"
       if [[ ! -f "${keystore_dir}/${keystore_name}" ]]; then
-        json_output false "Swap failed (pre-flight): Keystore '${keystore_name}' not found in ${keystore_dir}. List keystores with: cast wallet list. No transaction was submitted."
+        json_output false "Zap failed (pre-flight): Keystore '${keystore_name}' not found in ${keystore_dir}. List keystores with: cast wallet list. No transaction was submitted."
         exit 1
       fi
       wallet_flags=(--account "$keystore_name" --password-file "$PASSWORD_FILE")
@@ -572,7 +563,7 @@ main() {
       ;;
     env)
       if [[ -z "${PRIVATE_KEY:-}" ]]; then
-        json_output false "Swap failed (pre-flight): PRIVATE_KEY environment variable not set. No transaction was submitted."
+        json_output false "Zap failed (pre-flight): PRIVATE_KEY environment variable not set. No transaction was submitted."
         exit 1
       fi
       export ETH_PRIVATE_KEY="$PRIVATE_KEY"
@@ -589,70 +580,42 @@ main() {
       log "Using Trezor (confirm on device)"
       ;;
     *)
-      json_output false "Swap failed (pre-flight): Unknown wallet method '$wallet_method'. Use: keystore, env, ledger, trezor. No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Unknown wallet method '$wallet_method'. Use: keystore, env, ledger, trezor. No transaction was submitted."
       exit 1
       ;;
   esac
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
   # Step 5: Execute transaction
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
 
   local explorer
   explorer=$(get_explorer_url "$chain")
 
   log "Chain: $chain"
-  log "Router: $to"
+  log "ZapRouter: $to"
   log "Value: $value wei"
   log "Gas limit: $gas"
   log "RPC: $rpc_url"
 
-  # AC-3: Verify chain ID before broadcasting to prevent sending on wrong network
+  # Verify chain ID before broadcasting to prevent sending on wrong network
   local expected_chain_id actual_chain_id
   expected_chain_id=$(get_expected_chain_id "$chain")
   if [[ -n "$expected_chain_id" ]]; then
-    actual_chain_id=$(cast chain-id --rpc-url "$rpc_url" 2>/dev/null || echo "")
+    actual_chain_id=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast chain-id --rpc-url "$rpc_url" 2>/dev/null || echo "")
     actual_chain_id="${actual_chain_id%%[^0-9]*}"
     if [[ -z "$actual_chain_id" ]]; then
-      json_output false "Swap failed (pre-flight): Could not verify chain ID from RPC $rpc_url. The RPC may be down. No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Could not verify chain ID from RPC $rpc_url. The RPC may be down. No transaction was submitted."
       exit 1
     fi
     if [[ "$actual_chain_id" != "$expected_chain_id" ]]; then
-      json_output false "Swap failed (pre-flight): Chain ID mismatch! RPC returned chain ID $actual_chain_id but expected $expected_chain_id for '$chain'. This could indicate a misconfigured or malicious RPC. No transaction was submitted."
+      json_output false "Zap failed (pre-flight): Chain ID mismatch! RPC returned chain ID $actual_chain_id but expected $expected_chain_id for '$chain'. This could indicate a misconfigured or malicious RPC. No transaction was submitted."
       exit 1
     fi
     log "Chain ID verified: $actual_chain_id"
   else
-    log "WARNING: No expected chain ID configured for '$chain' — skipping chain ID verification"
+    log "WARNING: No expected chain ID configured for '$chain' -- skipping chain ID verification"
   fi
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # Step 5b: Pre-broadcast simulation via cast call
-  # ─────────────────────────────────────────────────────────────────────────
-
-  log "Simulating transaction (cast call)..."
-
-  local sim_output
-  local sim_exit=0
-
-  sim_output=$(cast call \
-    --rpc-url "$rpc_url" \
-    --from "$sender" \
-    --value "$value" \
-    --gas-limit "$gas" \
-    "$to" \
-    "$data" 2>&1) || sim_exit=$?
-
-  if [[ $sim_exit -ne 0 ]]; then
-    # Sanitize simulation error output (same pattern as tx error sanitization)
-    local safe_sim_output
-    safe_sim_output=$(echo "$sim_output" | sed -E \
-      -e 's/0x[a-fA-F0-9]{64}/[REDACTED_HEX]/g')
-    json_output false "Swap failed (pre-flight simulation): Transaction would revert on-chain. No transaction was submitted. Revert output: $safe_sim_output"
-    exit 1
-  fi
-
-  log "Simulation passed"
 
   log "Executing transaction..."
 
@@ -660,7 +623,7 @@ main() {
   local tx_hash
   local exit_code=0
 
-  tx_output=$(cast send \
+  tx_output=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast send \
     --rpc-url "$rpc_url" \
     "${wallet_flags[@]}" \
     --gas-limit "$gas" \
@@ -678,7 +641,7 @@ main() {
       log "Primary RPC failed (rate limited), retrying with fallback: $fallback_rpc"
       sleep 2
       exit_code=0
-      tx_output=$(cast send \
+      tx_output=$(FOUNDRY_DISABLE_NIGHTLY_WARNING=1 cast send \
         --rpc-url "$fallback_rpc" \
         "${wallet_flags[@]}" \
         --gas-limit "$gas" \
@@ -703,9 +666,9 @@ main() {
     exit 1
   fi
 
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
   # Step 6: Parse result and output
-  # ─────────────────────────────────────────────────────────────────────────
+  # ---------------------------------------------------------------------------
 
   tx_hash=$(echo "$tx_output" | jq -r '.transactionHash // empty')
 
@@ -715,7 +678,7 @@ main() {
   fi
 
   if [[ -z "$tx_hash" ]]; then
-    # L-1: Apply same redaction as the error path above to prevent key leakage
+    # Apply same redaction as the error path above to prevent key leakage
     local safe_tx_output
     safe_tx_output=$(echo "$tx_output" | sed -E \
       -e 's/--private-key [^ ]*/--private-key [REDACTED]/g' \
@@ -745,13 +708,14 @@ main() {
     --arg status "$status" \
     --arg explorer "$explorer/tx/$tx_hash" \
     --arg sender "$sender" \
-    --arg recipient "$recipient" \
     --arg router "$to" \
     --arg value "$value" \
     --arg tokenInSymbol "$token_in_symbol" \
     --arg tokenInAmount "$amount_in" \
-    --arg tokenOutSymbol "$token_out_symbol" \
-    --arg tokenOutAmount "$amount_out" \
+    --arg poolAddress "$zap_pool_address" \
+    --arg dex "$zap_dex" \
+    --arg tickLower "$tick_lower" \
+    --arg tickUpper "$tick_upper" \
     --arg slippageBps "$slippage_bps" \
     --arg walletMethod "$wallet_method" \
     '{
@@ -762,14 +726,16 @@ main() {
       "gasUsed": $gasUsed,
       "status": $status,
       "explorerUrl": $explorer,
-      "swap": {
+      "zap": {
         "tokenIn": {"symbol": $tokenInSymbol, "amount": $tokenInAmount},
-        "tokenOut": {"symbol": $tokenOutSymbol, "amount": $tokenOutAmount},
+        "poolAddress": $poolAddress,
+        "dex": $dex,
+        "tickLower": $tickLower,
+        "tickUpper": $tickUpper,
         "slippageBps": $slippageBps
       },
       "tx": {
         "sender": $sender,
-        "recipient": $recipient,
         "router": $router,
         "value": $value
       },
