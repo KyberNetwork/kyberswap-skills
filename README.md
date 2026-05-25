@@ -2,6 +2,8 @@
 
 Skills for interacting with [KyberSwap](https://docs.kyberswap.com) DeFi infrastructure. Get swap quotes, build transaction calldata, create limit orders, and zap into liquidity pools across EVM chains.
 
+Works with Claude Code, Cursor, Cline, Amp, Codex, and any agent that supports the [skills standard](https://skills.sh).
+
 <p align="center">
   <img src="assets/demo-install.gif" alt="KyberSwap Skills demo — install and usage" width="670" />
   <br />
@@ -16,12 +18,10 @@ Skills for interacting with [KyberSwap](https://docs.kyberswap.com) DeFi infrast
 
 ## Structure
 
-This is a Claude Code plugin. Skills live in the `skills/` directory; shared API docs and token data live in `references/`.
+Skills live in the `skills/` directory; shared API docs and token data live in `references/`.
 
 ```
 kyberswap-skills/
-├── .claude-plugin/
-│   └── plugin.json     # Plugin manifest
 ├── skills/
 │   ├── quote/          # Get a swap quote
 │   │   └── SKILL.md
@@ -213,14 +213,28 @@ Requires `cast`, `curl`, and `jq`. **EXTREMELY DANGEROUS**: Builds the zap route
 
 ## Installation
 
-Install as a Claude Code plugin:
+```bash
+npx skills add KyberNetwork/kyberswap-skills
+```
+
+Works in any project directory. Installs all 16 skills and creates symlinks for Claude Code, Cursor, Cline, Amp, Codex, and other supported agents automatically.
+
+**Global install** (available in all projects):
 
 ```bash
-# From the Claude Code CLI
-/install-plugin https://github.com/kyberswap/kyberswap-skills
+npx skills add KyberNetwork/kyberswap-skills -g
+```
 
-# Or test locally
-claude --plugin-dir /path/to/kyberswap-skills
+**Install a single skill:**
+
+```bash
+npx skills add KyberNetwork/kyberswap-skills --skill quote
+```
+
+**Claude Code plugin install** (alternative):
+
+```bash
+/install-plugin https://github.com/KyberNetwork/kyberswap-skills
 ```
 
 <p align="center">
@@ -264,7 +278,7 @@ Portfolio & info (read-only):
   /position-manager ──► position list + APR + unclaimed fees
 ```
 
-1. **Claude Code plugin** — Installed as a plugin with auto-discovered skills in the `skills/` directory.
+1. **Universal agent support** — Installed via `npx skills add`, works with Claude Code, Cursor, Cline, Amp, Codex, and other agents that support the skills standard. Skills are stored in `.agents/skills/` and symlinked per agent.
 2. **Markdown-driven skills** — `quote`, `swap-build`, `swap-execute`, `limit-order`, and `zap` are pure markdown instructions. The agent reads them and executes the workflow directly.
 3. **Script-driven skills** — `swap-execute-fast`, `limit-order-fast`, and `zap-fast` use shell scripts (`curl` + `jq` + `cast`) to build and execute in one step.
 4. **Token resolution** — Native tokens and major stablecoins are in `references/token-registry.md`. For all other tokens, the agent (or script) queries the KyberSwap Token API (`token-api.kyberswap.com`).
